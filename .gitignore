@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Logs and caches
+*.log
+.cache/
+.pytest_cache/
+
+# Runtime storage
+storage/uploads/*
+storage/outputs/*
+storage/debug/*
+
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+!storage/debug/.gitkeep
+
+# Test outputs and private CCCD images
+tests/**/output/*
+tests/**/sample_cccd.jpg
+tests/**/*cccd*.jpg
+tests/**/*cccd*.jpeg
+tests/**/*cccd*.png
+
+# OCR and AI models
+.paddlex/
+*.onnx
+*.pdmodel
+*.pdparams
+*.pth
+*.pt
+
+# OS
+.DS_Store
