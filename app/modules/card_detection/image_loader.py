@@ -8,29 +8,19 @@ from app.core.exceptions import BadRequestException
 
 class ImageLoader:
     """
-    Chịu trách nhiệm đọc ảnh từ ổ đĩa.
-
-    Sau này có thể mở rộng:
-        - Camera
-        - Webcam
-        - URL
-        - Base64
+    Đọc ảnh từ ổ đĩa.
+    Sau này có thể mở rộng để đọc ảnh từ camera, URL hoặc base64.
     """
 
     def load(self, image_path: str) -> np.ndarray:
-
         path = Path(image_path)
 
         if not path.exists():
-            raise BadRequestException(
-                f"Không tìm thấy ảnh: {image_path}"
-            )
+            raise BadRequestException(f"Không tìm thấy ảnh: {image_path}")
 
         image = cv2.imread(str(path))
 
         if image is None:
-            raise BadRequestException(
-                "Không đọc được ảnh."
-            )
+            raise BadRequestException("Không đọc được ảnh.")
 
         return image

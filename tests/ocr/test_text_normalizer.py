@@ -1,32 +1,107 @@
-from pathlib import Path
+```python
+from __future__ import annotations
+
 import sys
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
-
-from app.modules.ocr.text_normalizer import TextNormalizer
+from pathlib import Path
 
 
-def main():
-    raw = [
-        "Vict Nana",
-        "Ha No",
-        "24/0311995",
-        "Hova ten / Full name:",
-        "CONC DAN",
+# Thêm thư mục gốc của project vào PYTHONPATH để import được package app.
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+
+from app.modules.ocr.text_normalizer import OCRTextNormalizer
+
+
+def run_test(
+    input_text: str,
+    expected_text: str,
+) -> bool:
+    """
+    Chạy một trường hợp kiểm thử OCRTextNormalizer.
+    """
+
+    actual_text = OCRTextNormalizer.normalize(input_text)
+    passed = actual_text == expected_text
+
+    print("=" * 60)
+    print("[PASS]" if passed else "[FAIL]")
+    print(f"Input   : {input_text}")
+    print(f"Expected: {expected_text}")
+    print(f"Actual  : {actual_text}")
+
+    return passed
+
+
+def main() -> None:
+    test_cases: list[tuple[str, str]] = [
+        (
+            "Vict Nana",
+            "Viet Nam",
+        ),
+        (
+            "Ha_Noi",
+            "Ha Noi",
+        ),
+        (
+            "24 / 03 / 1995",
+            "24/03/1995",
+        ),
+        (
+            "Hova ten / Full name:",
+            "Ho va ten/Full name:",
+        ),
+        (
+            "CONG_DAN",
+            "CONG DAN",
+        ),
+        (
+            "Gioitinh / Sex:",
+            "Gioi tinh/Sex:",
+        ),
+        (
+            "Ngay sinh / Date ofbirth:",
+            "Ngay sinh/Date of birth:",
+        ),
+        (
+            "Date ofDxpiry",
+            "Date of Expiry",
+        ),
+        (
+            "Freedom_Happiness",
+            "Freedom - Happiness",
+        ),
+        (
+            "Noi   thuong   tru",
+            "Noi thuong tru",
+        ),
     ]
 
-    normalizer = TextNormalizer()
+    passed_count = 0
 
-    result = normalizer.normalize(raw)
+    for input_text, expected_text in test_cases:
+        if run_test(input_text, expected_text):
+            passed_count += 1
 
-    print("=" * 50)
+    total_count = len(test_cases)
+    failed_count = total_count - passed_count
 
-    for line in result:
-        print(line)
+    print("=" * 60)
+    print(f"Total : {total_count}")
+    print(f"Passed: {passed_count}")
+    print(f"Failed: {failed_count}")
+    print("=" * 60)
 
-    print("=" * 50)
+    if failed_count > 0:
+        raise AssertionError(
+            f"Có {failed_count} trường hợp kiểm thử chưa đạt."
+        )
+
+    print("Tất cả test OCRTextNormalizer đều thành công.")
 
 
 if __name__ == "__main__":
     main()
+```

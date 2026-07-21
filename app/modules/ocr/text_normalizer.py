@@ -1,61 +1,240 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 
-class TextNormalizer:
+class OCRTextNormalizer:
     """
-    Chuẩn hóa kết quả OCR trước khi parser.
+    Chuẩn hóa văn bản OCR trên CCCD.
+
+    Chức năng:
+    - Chuẩn hóa Unicode.
+    - Xóa khoảng trắng dư.
+    - Thay dấu gạch dưới bằng khoảng trắng.
+    - Chuẩn hóa dấu "/" trong ngày tháng và nhãn song ngữ.
+    - Sửa các nhãn CCCD thường bị OCR nhận dính chữ.
+    - Sửa một số lỗi OCR phổ biến.
     """
 
-    COMMON_REPLACEMENTS = {
-        "Vict Nana": "Viet Nam",
-        "VICT NANA": "VIET NAM",
-        "Netonelt": "Nationality",
-        "Gioitinh": "Gioi tinh",
-        "Hova ten": "Ho va ten",
-        "Ngay sinh": "Ngay sinh",
-        "Ha No": "Ha Noi",
-        "Can Cuoc Conc Dan": "Can Cuoc Cong Dan",
-        "CONC DAN": "CONG DAN",
-    }
+    PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+        # Nhãn tiếng Việt
+        (r"\bhova\s*ten\b", "Ho va ten"),
+        (r"\bhovaten\b", "Ho va ten"),
+        (r"\bho\s*va\s*ten\b", "Ho va ten"),
 
-    def normalize(self, lines: list[str]) -> list[str]:
-        normalized = []
+        (r"\bngaysinh\b", "Ngay sinh"),
+        (r"\bngay\s*sinh\b", "Ngay sinh"),
+
+        (r"\bgioitinh\b", "Gioi tinh"),
+        (r"\bgioi\s*tinh\b", "Gioi tinh"),
+
+        (r"\bquoctich\b", "Quoc tich"),
+        (r"\bquoc\s*tich\b", "Quoc tich"),
+
+        (r"\bquequan\b", "Que quan"),
+        (r"\bque\s*quan\b", "Que quan"),
+
+        (r"\bnoithuongtru\b", "Noi thuong tru"),
+        (r"\bnoi\s*thuong\s*tru\b", "Noi thuong tru"),
+
+        (r"\bcancuoccongdan\b", "CAN CUOC CONG DAN"),
+        (
+            r"\bcan\s*cuoc\s*conc\s*dan\b",
+            "CAN CUOC CONG DAN",
+        ),
+
+        # Nhãn tiếng Anh
+        (r"\bfullname\b", "Full name"),
+
+        (r"\bdateofbirth\b", "Date of birth"),
+        (r"\bdate\s*ofbirth\b", "Date of birth"),
+        (r"\bdateof\s*birth\b", "Date of birth"),
+
+        (r"\bplaceoforigin\b", "Place of origin"),
+        (r"\bplace\s*oforigin\b", "Place of origin"),
+        (r"\bplaceof\s*origin\b", "Place of origin"),
+
+        (
+            r"\bplaceofresidence\b",
+            "Place of residence",
+        ),
+        (
+            r"\bplace\s*ofresidence\b",
+            "Place of residence",
+        ),
+        (
+            r"\bplaceof\s*residence\b",
+            "Place of residence",
+        ),
+
+        (r"\bdateofexpiry\b", "Date of Expiry"),
+        (
+            r"\bdate\s*ofd[a-z]*piry\b",
+            "Date of Expiry",
+        ),
+        (
+            r"\bdate\s*of\s*[dexp]{1,3}piry\b",
+            "Date of Expiry",
+        ),
+
+        (
+            r"\bcitizenidentitycard\b",
+            "Citizen Identity Card",
+        ),
+
+        # Quốc tịch thường bị OCR sai
+        (r"\bvict\s*nana\b", "Viet Nam"),
+        (r"\bviet\s*nana\b", "Viet Nam"),
+        (r"\bvict\s*nam\b", "Viet Nam"),
+        (r"\bvietnam\b", "Viet Nam"),
+
+        # Cụm từ cố định
+        (
+            r"\bfreedom\s*happiness\b",
+            "Freedom - Happiness",
+        ),
+        (
+            r"\bindependence\s*freedom\b",
+            "Independence - Freedom",
+        ),
+    )
+
+    @classmethod
+    def normalize(
+        cls,
+        text: str | None,
+    ) -> str:
+        """
+        Chuẩn hóa một chuỗi OCR.
+
+        Args:
+            text: Văn bản OCR đầu vào.
+
+        Returns:
+            Văn bản đã được chuẩn hóa.
+        """
+
+        if not text:
+            return ""
+
+        value = unicodedata.normalize(
+            "NFKC",
+            str(text),
+        )
+
+        # Chuẩn hóa các ký tự phân cách.
+        value = value.replace("_", " ")
+        value = value.replace("|", "/")
+        value = value.replace("–", "-")
+        value = value.replace("—", "-")
+
+        # Loại bỏ ký tự điều khiển.
+        value = "".join(
+            char
+            for char in value
+            if unicodedata.category(char)[0] != "C"
+        )
+
+        # Thu gọn khoảng trắng ban đầu.
+        value = re.sub(
+            r"\s+",
+            " ",
+            value,
+        ).strip()
+
+        # Xóa khoảng trắng trước dấu câu.
+        # Không xử lý dấu "/" tại bước này.
+        value = re.sub(
+            r"\s+([,.:;])",
+            r"\1",
+            value,
+        )
+
+        # Thêm khoảng trắng sau dấu câu khi bị dính chữ.
+        value = re.sub(
+            r"([,:;])(?=[A-Za-zÀ-ỹ0-9])",
+            r"\1 ",
+            value,
+        )
+
+        # Chuẩn hóa ngày tháng:
+        # 24 / 03 / 1995 -> 24/03/1995
+        value = re.sub(
+            r"(?<=\d)\s*/\s*(?=\d)",
+            "/",
+            value,
+        )
+
+        # Chuẩn hóa dấu "/" giữa hai phần chữ:
+        # Ho va ten/ Full name -> Ho va ten / Full name
+        value = re.sub(
+            r"(?<=[A-Za-zÀ-ỹ])\s*/\s*(?=[A-Za-zÀ-ỹ])",
+            " / ",
+            value,
+        )
+
+        # Trường hợp trước "/" là chữ,
+        # sau "/" có khoảng trắng rồi mới tới chữ.
+        value = re.sub(
+            r"(?<=[A-Za-zÀ-ỹ])\s*/\s+(?=[A-Za-zÀ-ỹ])",
+            " / ",
+            value,
+        )
+
+        # Sửa các cụm từ OCR bị dính hoặc nhận sai.
+        for pattern, replacement in cls.PHRASE_REPLACEMENTS:
+            value = re.sub(
+                pattern,
+                replacement,
+                value,
+                flags=re.IGNORECASE,
+            )
+
+        # Chạy lại chuẩn hóa ngày tháng sau khi thay thế.
+        value = re.sub(
+            r"(?<=\d)\s*/\s*(?=\d)",
+            "/",
+            value,
+        )
+
+        # Chạy lại chuẩn hóa nhãn song ngữ.
+        value = re.sub(
+            r"(?<=[A-Za-zÀ-ỹ])\s*/\s*(?=[A-Za-zÀ-ỹ])",
+            " / ",
+            value,
+        )
+
+        # Xóa khoảng trắng dư lần cuối.
+        value = re.sub(
+            r"\s+",
+            " ",
+            value,
+        ).strip()
+
+        return value
+
+    @classmethod
+    def normalize_lines(
+        cls,
+        lines: list[str],
+    ) -> list[str]:
+        """
+        Chuẩn hóa danh sách các dòng OCR.
+
+        Args:
+            lines: Danh sách văn bản OCR.
+
+        Returns:
+            Danh sách văn bản đã chuẩn hóa và loại bỏ dòng rỗng.
+        """
+
+        normalized_lines: list[str] = []
 
         for line in lines:
-            line = self.normalize_spaces(line)
-            line = self.fix_common_words(line)
-            line = self.fix_date(line)
+            clean_line = cls.normalize(line)
 
-            normalized.append(line)
+            if clean_line:
+                normalized_lines.append(clean_line)
 
-        return normalized
-
-    def normalize_spaces(self, text: str) -> str:
-        return re.sub(r"\s+", " ", text).strip()
-
-    def fix_common_words(self, text: str) -> str:
-        for wrong, correct in self.COMMON_REPLACEMENTS.items():
-            text = text.replace(wrong, correct)
-
-        return text
-
-    def fix_date(self, text: str) -> str:
-        text = text.replace("!", "/")
-        text = text.replace("|", "/")
-        text = text.replace(";", ":")
-
-        text = re.sub(
-            r"(\d{2})/(\d{2})1(\d{4})",
-            r"\1/\2/\3",
-            text,
-        )
-
-        text = re.sub(
-            r"(\d{2})/(\d{2})(\d{4})",
-            r"\1/\2/\3",
-            text,
-        )
-
-        return text
+        return normalized_lines

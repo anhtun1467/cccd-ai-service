@@ -19,7 +19,7 @@ class ContourDetector:
         min_area_ratio: float = 0.20,
         min_aspect_ratio: float = 1.35,
         max_aspect_ratio: float = 2.35,
-        padding: int = 30,
+        padding: int = 55,
     ):
         self.max_contours = max_contours
         self.epsilon_factor = epsilon_factor
