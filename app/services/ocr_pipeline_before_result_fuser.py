@@ -10,7 +10,6 @@ from app.core.config import settings
 from app.modules.card_detection.detector import CardDetector
 from app.modules.ocr.field_ocr_service import field_ocr_service
 from app.modules.ocr.line_merger import OCRLineMerger
-from app.modules.ocr.result_fuser import fuse_ocr_data
 from app.modules.ocr.service import ocr_service
 from app.modules.ocr.text_normalizer import OCRTextNormalizer
 from app.modules.ocr.validator import CCCDValidator
@@ -209,31 +208,9 @@ class OcrPipelineService:
             )
         )
 
-        raw_text_for_fusion = self.make_json_safe(
-            full_ocr_result.get(
-                "normalizedText",
-                [],
-            )
-        )
-
-        if isinstance(
-            raw_text_for_fusion,
-            str,
-        ):
-            raw_text_for_fusion = (
-                raw_text_for_fusion.splitlines()
-            )
-
-        if not isinstance(
-            raw_text_for_fusion,
-            list,
-        ):
-            raw_text_for_fusion = []
-
-        merged_data, data_sources = fuse_ocr_data(
-            full_card_data=full_card_data,
+        merged_data = self.merge_structured_data(
             field_data=field_data,
-            raw_text=raw_text_for_fusion,
+            full_card_data=full_card_data,
         )
 
         validation_result = self.validator.validate(
@@ -254,7 +231,12 @@ class OcrPipelineService:
             )
         )
 
-        normalized_text = raw_text_for_fusion
+        normalized_text = self.make_json_safe(
+            full_ocr_result.get(
+                "normalizedText",
+                [],
+            )
+        )
 
         processing_time = round(
             time.perf_counter() - start_time,
@@ -326,8 +308,11 @@ class OcrPipelineService:
                 ),
                 "fullCardData": full_card_data,
                 "fieldData": field_data,
-                "dataSources": self.make_json_safe(
-                    data_sources
+                "dataSources": (
+                    self.resolve_data_sources(
+                        field_data=field_data,
+                        full_card_data=full_card_data,
+                    )
                 ),
             },
             "portrait": portrait_result,
