@@ -212,7 +212,10 @@ class OcrPipelineService:
         raw_text_for_fusion = self.make_json_safe(
             full_ocr_result.get(
                 "normalizedText",
-                [],
+                full_ocr_result.get(
+                    "rawText",
+                    [],
+                ),
             )
         )
 
@@ -229,6 +232,24 @@ class OcrPipelineService:
             list,
         ):
             raw_text_for_fusion = []
+
+        print("=" * 80)
+        print("RAW TEXT FOR FUSION")
+
+        if raw_text_for_fusion:
+            for index, line in enumerate(
+                raw_text_for_fusion
+            ):
+                print(
+                    f"{index}: {line!r}"
+                )
+        else:
+            print(
+                "[WARNING] raw_text_for_fusion "
+                "đang rỗng"
+            )
+
+        print("=" * 80)
 
         merged_data, data_sources = fuse_ocr_data(
             full_card_data=full_card_data,

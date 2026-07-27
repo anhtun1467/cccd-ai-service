@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Annotated
 
@@ -39,13 +39,13 @@ def validate_upload_file(
     field_name: str,
 ) -> None:
     """
-    Kiểm tra định dạng file upload.
+    Ki?m tra d?nh d?ng file upload.
     """
 
     if not upload_file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} chưa có tên file.",
+            detail=f"{field_name} chua có tên file.",
         )
 
     if upload_file.content_type not in ALLOWED_CONTENT_TYPES:
@@ -56,8 +56,8 @@ def validate_upload_file(
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=(
-                f"{field_name} không đúng định dạng ảnh. "
-                f"Định dạng hỗ trợ: {allowed_types}."
+                f"{field_name} không dúng d?nh d?ng ?nh. "
+                f"Đ?nh d?ng h? tr?: {allowed_types}."
             ),
         )
 
@@ -65,27 +65,27 @@ def validate_upload_file(
 @router.post(
     "/verify",
     response_model=FaceVerificationResponse,
-    summary="Đối chiếu khuôn mặt CCCD với ảnh webcam",
+    summary="Đ?i chi?u khuôn m?t CCCD v?i ?nh webcam",
     description=(
-        "Nhận ảnh mặt trước CCCD và ảnh khuôn mặt chụp "
-        "từ webcam, sau đó thực hiện đối chiếu khuôn mặt 1:1."
+        "Nh?n ?nh m?t tru?c CCCD và ?nh khuôn m?t ch?p "
+        "t? webcam, sau dó th?c hi?n d?i chi?u khuôn m?t 1:1."
     ),
     responses={
         400: {
             "model": FaceVerificationErrorResponse,
-            "description": "File đầu vào không hợp lệ.",
+            "description": "File d?u vào không h?p l?.",
         },
         415: {
             "model": FaceVerificationErrorResponse,
-            "description": "Định dạng file không được hỗ trợ.",
+            "description": "Đ?nh d?ng file không du?c h? tr?.",
         },
         422: {
             "model": FaceVerificationErrorResponse,
-            "description": "Không thể phát hiện hoặc xác minh khuôn mặt.",
+            "description": "Không th? phát hi?n ho?c xác minh khuôn m?t.",
         },
         500: {
             "model": FaceVerificationErrorResponse,
-            "description": "Lỗi nội bộ của hệ thống.",
+            "description": "L?i n?i b? c?a h? th?ng.",
         },
     },
 )
@@ -93,18 +93,18 @@ async def verify_face(
     card_image: Annotated[
         UploadFile,
         File(
-            description="Ảnh mặt trước CCCD dạng JPG, JPEG hoặc PNG."
+            description="?nh m?t tru?c CCCD d?ng JPG, JPEG ho?c PNG."
         ),
     ],
     webcam_image: Annotated[
         UploadFile,
         File(
-            description="Ảnh khuôn mặt chụp từ webcam."
+            description="?nh khuôn m?t ch?p t? webcam."
         ),
     ],
 ) -> FaceVerificationResponse:
     """
-    Đối chiếu ảnh chân dung trên CCCD với ảnh webcam.
+    Đ?i chi?u ?nh chân dung trên CCCD v?i ?nh webcam.
     """
 
     validate_upload_file(
@@ -121,8 +121,8 @@ async def verify_face(
         card_image_bytes = await card_image.read()
         webcam_image_bytes = await webcam_image.read()
 
-        # Pipeline xử lý AI là tác vụ CPU-bound.
-        # Chạy trong threadpool để không chặn event loop FastAPI.
+        # Pipeline x? lư AI là tác v? CPU-bound.
+        # Ch?y trong threadpool d? không ch?n event loop FastAPI.
         pipeline_output = await run_in_threadpool(
             face_verification_pipeline.process,
             card_image_bytes,
@@ -166,8 +166,8 @@ async def verify_face(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
-                "Đã xảy ra lỗi trong quá trình xác minh "
-                "khuôn mặt."
+                "Đă x?y ra l?i trong quá tŕnh xác minh "
+                "khuôn m?t."
             ),
         ) from exc
 

@@ -1,87 +1,122 @@
-﻿from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-
-from app.modules.ocr.result_fuser import (
+﻿from app.modules.ocr.result_fuser import (
     fuse_ocr_data,
-    normalize_date,
-    normalize_nationality,
+    normalize_gender,
 )
 
 
-def test_normalize_missing_date_separator() -> None:
-    assert normalize_date(
-        "24/0311995"
-    ) == "24/03/1995"
+def test_gender_does_not_use_viet_nam_as_male():
+    assert normalize_gender("Viet Nam") is None
 
 
-def test_normalize_date_digits_only() -> None:
-    assert normalize_date(
-        "24031995"
-    ) == "24/03/1995"
-
-
-def test_normalize_nationality() -> None:
-    assert normalize_nationality(
-        "Viet Nam"
-    ) == "Viet Nam"
-
-    assert normalize_nationality(
-        "Mre"
-    ) is None
-
-
-def test_fuse_bad_field_data_with_full_card() -> None:
-    full_card_data = {
-        "idNumber": "001095014159",
-        "fullName": "NGUYEN HOANG NAM",
-        "dateOfBirth": None,
-        "gender": "Nam",
-        "nationality": "Viet Nam",
-    }
-
-    field_data = {
-        "idNumber": None,
-        "fullName": "S NO VA TEN HO",
-        "dateOfBirth": None,
-        "gender": None,
-        "nationality": "Mre",
-    }
-
-    raw_text = [
-        "Ho va ten / Full name:",
-        "NGUYEN HOANG NAM",
-        "Ngay sinh / Date of birth: 24/0311995",
-        "Quoc tich / Nationality: Viet Nam",
-    ]
-
+def test_female_recovery_from_same_line():
     result, sources = fuse_ocr_data(
-        full_card_data=full_card_data,
-        field_data=field_data,
-        raw_text=raw_text,
+        full_card_data={
+            "gender": "Nam",
+            "nationality": "Viet Nam",
+        },
+        field_data={},
+        raw_text=[
+            "Gioi tinh / Sex: Nu Quoc tich / Nationality: Viet Nam",
+        ],
     )
 
-    assert result["fullName"] == "NGUYEN HOANG NAM"
-    assert result["dateOfBirth"] == "24/03/1995"
-    assert result["nationality"] == "Viet Nam"
-
-    assert sources["fullName"] == "FULL_CARD_OCR"
-    assert sources["dateOfBirth"] == "RAW_TEXT_RECOVERY"
-    assert sources["nationality"] == "FULL_CARD_OCR"
+    assert result["gender"] == "Nu"
+    assert sources["gender"] == "RAW_TEXT_RECOVERY"
 
 
-if __name__ == "__main__":
-    test_normalize_missing_date_separator()
-    test_normalize_date_digits_only()
-    test_normalize_nationality()
-    test_fuse_bad_field_data_with_full_card()
+def test_name_is_truncated_before_birth_label():
+    result, _ = fuse_ocr_data(
+        full_card_data={
+            "fullName": "DANG THI MAY NGAY SINH DATE OF BIRTH",
+        },
+        field_data={},
+        raw_text=[
+            "Ho va ten / Full name:",
+            "DANG THI MAY",
+            "Ngay sinh / Date of birth: 11/01/2003",
+        ],
+    )
 
-    print("Tất cả test result_fuser đã PASS.")
+    assert result["fullName"] == "DANG THI MAY"
+
+
+def test_origin_and_residence_from_raw_lines():
+    result, sources = fuse_ocr_data(
+        full_card_data={
+            "placeOfOrigin": "Place of origin:",
+            "placeOfResidence": "Place of residence:",
+        },
+        field_data={},
+        raw_text=[
+            "Que quan / Place of origin:",
+            "Le Loi, Thanh pho Bac Giang, Bac Giang",
+            "Noi thuong tru / Place of residence: Pho Voi",
+            "Thi tran Voi, Lang Giang, Bac Giang",
+        ],
+    )
+
+    assert result["placeOfOrigin"] == (
+        "Le Loi, Thanh pho Bac Giang, Bac Giang"
+    )
+    assert result["placeOfResidence"] == (
+        "Pho Voi, Thi tran Voi, Lang Giang, Bac Giang"
+    )
+    assert sources["placeOfOrigin"] == "RAW_TEXT_RECOVERY"
+    assert sources["placeOfResidence"] == "RAW_TEXT_RECOVERY"
+
+
+def test_expiry_is_recovered_from_expiry_label_only():
+    result, _ = fuse_ocr_data(
+        full_card_data={"dateOfExpiry": None},
+        field_data={"dateOfExpiry": None},
+        raw_text=[
+            "Ngay sinh / Date of birth: 11/01/2003",
+            "Co gia tri den: 11/01/2028",
+        ],
+    )
+
+    assert result["dateOfExpiry"] == "11/01/2028"
+
+def test_gender_parser_does_not_read_viet_nam_as_male():
+    from app.modules.ocr.result_fuser import normalize_gender
+
+    assert normalize_gender("Viet Nam") is None
+    assert normalize_gender("Việt Nam") is None
+
+
+def test_gender_parser_returns_nam():
+    from app.modules.ocr.result_fuser import normalize_gender
+
+    assert normalize_gender("Nam") == "Nam"
+    assert normalize_gender("Male") == "Nam"
+
+
+def test_gender_parser_returns_nu():
+    from app.modules.ocr.result_fuser import normalize_gender
+
+    assert normalize_gender("Nu") == "Nu"
+    assert normalize_gender("Nữ") == "Nu"
+    assert normalize_gender("Female") == "Nu"
+
+
+def test_recover_female_before_nationality():
+    from app.modules.ocr.result_fuser import recover_gender
+
+    raw_text = [
+        "Gioi tinh / Sex: Nu "
+        "Quoc tich / Nationality: Viet Nam"
+    ]
+
+    assert recover_gender(raw_text) == "Nu"
+
+
+def test_recover_male_before_nationality():
+    from app.modules.ocr.result_fuser import recover_gender
+
+    raw_text = [
+        "Gioi tinh / Sex: Nam "
+        "Quoc tich / Nationality: Viet Nam"
+    ]
+
+    assert recover_gender(raw_text) == "Nam"
+

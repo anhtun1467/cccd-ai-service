@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 import unittest
@@ -24,7 +24,7 @@ from app.modules.face_verification.verification_service import (
 
 class FakePortraitExtractor:
     """
-    Portrait extractor giả để unit test không cần tải InsightFace.
+    Portrait extractor gi? d? unit test không c?n t?i InsightFace.
     """
 
     def __init__(self) -> None:
@@ -50,7 +50,7 @@ class FakePortraitExtractor:
 
 class FakeEmbedder:
     """
-    Embedder giả trả lần lượt embedding CCCD và webcam.
+    Embedder gi? tr? l?n lu?t embedding CCCD và webcam.
     """
 
     def __init__(
@@ -75,7 +75,7 @@ class FakeEmbedder:
     ):
         if not self.results:
             raise RuntimeError(
-                "FakeEmbedder không còn kết quả giả."
+                "FakeEmbedder không c̣n k?t qu? gi?."
             )
 
         return self.results.pop(0)
@@ -116,7 +116,7 @@ class FaceVerificationServiceTest(unittest.TestCase):
 
     def test_match_status(self) -> None:
         """
-        Hai vector giống nhau phải trả về MATCH.
+        Hai vector gi?ng nhau ph?i tr? v? MATCH.
         """
 
         service = self.create_service(
@@ -152,7 +152,7 @@ class FaceVerificationServiceTest(unittest.TestCase):
 
     def test_review_status(self) -> None:
         """
-        Similarity nằm giữa 0.40 và 0.50 phải trả REVIEW.
+        Similarity n?m gi?a 0.40 và 0.50 ph?i tr? REVIEW.
         """
 
         similarity = 0.45
@@ -196,8 +196,8 @@ class FaceVerificationServiceTest(unittest.TestCase):
 
     def test_not_match_status(self) -> None:
         """
-        Hai vector vuông góc có similarity bằng 0,
-        phải trả NOT_MATCH.
+        Hai vector vuông góc có similarity b?ng 0,
+        ph?i tr? NOT_MATCH.
         """
 
         service = self.create_service(
@@ -233,7 +233,7 @@ class FaceVerificationServiceTest(unittest.TestCase):
 
     def test_result_to_dict(self) -> None:
         """
-        Kiểm tra dữ liệu đầu ra phù hợp để trả về API.
+        Ki?m tra d? li?u d?u ra phù h?p d? tr? v? API.
         """
 
         service = self.create_service(
@@ -281,7 +281,7 @@ class FaceVerificationServiceTest(unittest.TestCase):
 
     def test_invalid_threshold_order(self) -> None:
         """
-        review_threshold phải nhỏ hơn match_threshold.
+        review_threshold ph?i nh? hon match_threshold.
         """
 
         with self.assertRaises(ValueError):

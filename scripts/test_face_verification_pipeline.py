@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -20,21 +20,21 @@ from app.services.face_verification_pipeline import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Kiểm thử FaceVerificationPipeline "
-            "bằng hai file ảnh."
+            "Ki?m th? FaceVerificationPipeline "
+            "b?ng hai file ?nh."
         )
     )
 
     parser.add_argument(
         "--card",
         required=True,
-        help="Đường dẫn ảnh mặt trước CCCD.",
+        help="Đu?ng d?n ?nh m?t tru?c CCCD.",
     )
 
     parser.add_argument(
         "--webcam",
         required=True,
-        help="Đường dẫn ảnh webcam.",
+        help="Đu?ng d?n ?nh webcam.",
     )
 
     return parser.parse_args()
@@ -53,12 +53,12 @@ def resolve_file_path(
 
     if not path.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy {file_name}: {path}"
+            f"Không t́m th?y {file_name}: {path}"
         )
 
     if not path.is_file():
         raise ValueError(
-            f"{file_name} không phải là file: {path}"
+            f"{file_name} không ph?i là file: {path}"
         )
 
     return path
@@ -69,12 +69,12 @@ def main() -> None:
 
     card_path = resolve_file_path(
         args.card,
-        "ảnh CCCD",
+        "?nh CCCD",
     )
 
     webcam_path = resolve_file_path(
         args.webcam,
-        "ảnh webcam",
+        "?nh webcam",
     )
 
     print("=" * 68)
@@ -87,7 +87,7 @@ def main() -> None:
     card_bytes = card_path.read_bytes()
     webcam_bytes = webcam_path.read_bytes()
 
-    print("\nĐang xác minh khuôn mặt...")
+    print("\nĐang xác minh khuôn m?t...")
 
     output = face_verification_pipeline.process(
         card_image_bytes=card_bytes,
@@ -96,7 +96,7 @@ def main() -> None:
 
     print()
     print("=" * 68)
-    print("KẾT QUẢ PIPELINE")
+    print("K?T QU? PIPELINE")
     print("=" * 68)
 
     print(

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -22,8 +22,8 @@ from app.modules.face_verification.verification_service import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Kiểm thử FaceVerificationService "
-            "bằng ảnh CCCD và ảnh webcam đã lưu."
+            "Ki?m th? FaceVerificationService "
+            "b?ng ?nh CCCD và ?nh webcam dă luu."
         )
     )
 
@@ -31,28 +31,28 @@ def parse_args() -> argparse.Namespace:
         "--card",
         required=True,
         type=str,
-        help="Đường dẫn ảnh mặt trước CCCD.",
+        help="Đu?ng d?n ?nh m?t tru?c CCCD.",
     )
 
     parser.add_argument(
         "--webcam",
         required=True,
         type=str,
-        help="Đường dẫn ảnh webcam.",
+        help="Đu?ng d?n ?nh webcam.",
     )
 
     parser.add_argument(
         "--match-threshold",
         type=float,
         default=0.50,
-        help="Ngưỡng MATCH.",
+        help="Ngu?ng MATCH.",
     )
 
     parser.add_argument(
         "--review-threshold",
         type=float,
         default=0.40,
-        help="Ngưỡng REVIEW.",
+        help="Ngu?ng REVIEW.",
     )
 
     return parser.parse_args()
@@ -73,14 +73,14 @@ def read_image(
 ):
     if not image_path.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy {image_name}: {image_path}"
+            f"Không t́m th?y {image_name}: {image_path}"
         )
 
     image = cv2.imread(str(image_path))
 
     if image is None:
         raise ValueError(
-            f"OpenCV không đọc được {image_name}: "
+            f"OpenCV không d?c du?c {image_name}: "
             f"{image_path}"
         )
 
@@ -95,12 +95,12 @@ def main() -> None:
 
     card_image = read_image(
         card_path,
-        "ảnh CCCD",
+        "?nh CCCD",
     )
 
     webcam_image = read_image(
         webcam_path,
-        "ảnh webcam",
+        "?nh webcam",
     )
 
     output_dir = (
@@ -130,14 +130,14 @@ def main() -> None:
     )
     print("=" * 64)
 
-    print("\nĐang khởi tạo service...")
+    print("\nĐang kh?i t?o service...")
 
     service = FaceVerificationService(
         match_threshold=args.match_threshold,
         review_threshold=args.review_threshold,
     )
 
-    print("Đang xác minh khuôn mặt...")
+    print("Đang xác minh khuôn m?t...")
 
     output = service.verify(
         card_image=card_image,
@@ -174,7 +174,7 @@ def main() -> None:
 
     print()
     print("=" * 64)
-    print("KẾT QUẢ")
+    print("K?T QU?")
     print("=" * 64)
     print(
         json.dumps(

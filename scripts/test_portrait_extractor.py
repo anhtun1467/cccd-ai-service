@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import sys
@@ -20,14 +20,14 @@ from app.modules.face_verification.portrait_extractor import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Trích xuất chân dung từ ảnh CCCD."
+        description="Trích xu?t chân dung t? ?nh CCCD."
     )
 
     parser.add_argument(
         "--image",
         type=str,
         required=True,
-        help="Đường dẫn ảnh CCCD đã crop hoặc căn thẳng.",
+        help="Đu?ng d?n ?nh CCCD dă crop ho?c can th?ng.",
     )
 
     return parser.parse_args()
@@ -45,14 +45,14 @@ def main() -> None:
 
     if not image_path.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy ảnh: {image_path}"
+            f"Không t́m th?y ?nh: {image_path}"
         )
 
     card_image = cv2.imread(str(image_path))
 
     if card_image is None:
         raise ValueError(
-            f"OpenCV không đọc được ảnh: {image_path}"
+            f"OpenCV không d?c du?c ?nh: {image_path}"
         )
 
     output_dir = (
@@ -79,11 +79,11 @@ def main() -> None:
     print("Model: buffalo_l")
     print("=" * 60)
 
-    print("\nĐang khởi tạo Portrait Extractor...")
+    print("\nĐang kh?i t?o Portrait Extractor...")
 
     extractor = CCCDPortraitExtractor()
 
-    print("Đang trích xuất ảnh chân dung...")
+    print("Đang trích xu?t ?nh chân dung...")
 
     result = extractor.extract(card_image)
 
@@ -107,17 +107,17 @@ def main() -> None:
 
     if not portrait_saved:
         raise RuntimeError(
-            f"Không thể lưu ảnh portrait: {portrait_path}"
+            f"Không th? luu ?nh portrait: {portrait_path}"
         )
 
     if not debug_saved:
         raise RuntimeError(
-            f"Không thể lưu ảnh debug: {debug_path}"
+            f"Không th? luu ?nh debug: {debug_path}"
         )
 
     print()
     print("=" * 60)
-    print("KẾT QUẢ")
+    print("K?T QU?")
     print("=" * 60)
     print(
         f"Method: {result.extraction_method}"
@@ -148,7 +148,7 @@ def main() -> None:
         result.portrait,
     )
 
-    print("\nNhấn phím bất kỳ để đóng cửa sổ.")
+    print("\nNh?n phím b?t k? d? dóng c?a s?.")
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()

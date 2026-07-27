@@ -1,12 +1,12 @@
-﻿"""
-Module xác minh khuôn mặt 1:1.
+"""
+Module xác minh khuôn m?t 1:1.
 
-Chức năng dự kiến:
+Ch?c nang d? ki?n:
 
-- Chụp khuôn mặt từ Logitech C922.
-- Nhận ảnh chân dung được crop từ CCCD.
-- Phát hiện và căn chỉnh khuôn mặt.
+- Ch?p khuôn m?t t? Logitech C922.
+- Nh?n ?nh chân dung du?c crop t? CCCD.
+- Phát hi?n và can ch?nh khuôn m?t.
 - Sinh embedding.
-- Tính độ tương đồng giữa hai khuôn mặt.
-- Trả về kết quả MATCH hoặc NOT_MATCH.
+- Tính d? tuong d?ng gi?a hai khuôn m?t.
+- Tr? v? k?t qu? MATCH ho?c NOT_MATCH.
 """

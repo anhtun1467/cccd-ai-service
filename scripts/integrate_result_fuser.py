@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -24,7 +24,7 @@ content = pipeline_path.read_text(
 )
 
 # ---------------------------------------------------------
-# 1. Tạo bản sao lưu
+# 1. T?o b?n sao luu
 # ---------------------------------------------------------
 
 if not backup_path.exists():
@@ -50,7 +50,7 @@ new_import = (
 if new_import not in content:
     if import_marker not in content:
         raise RuntimeError(
-            "Không tìm thấy vị trí để thêm import "
+            "Không t́m th?y v? trí d? thêm import "
             "fuse_ocr_data."
         )
 
@@ -61,7 +61,7 @@ if new_import not in content:
     )
 
 # ---------------------------------------------------------
-# 3. Thay logic merge cũ bằng fuse_ocr_data
+# 3. Thay logic merge cu b?ng fuse_ocr_data
 # ---------------------------------------------------------
 
 old_merge_block = '''        merged_data = self.merge_structured_data(
@@ -109,8 +109,8 @@ new_merge_block = '''        raw_text_for_fusion = self.make_json_safe(
 if old_merge_block not in content:
     if "merged_data, data_sources = fuse_ocr_data(" not in content:
         raise RuntimeError(
-            "Không tìm thấy block merge_structured_data "
-            "cần thay thế."
+            "Không t́m th?y block merge_structured_data "
+            "c?n thay th?."
         )
 else:
     content = content.replace(
@@ -120,7 +120,7 @@ else:
     )
 
 # ---------------------------------------------------------
-# 4. Dùng lại raw_text_for_fusion
+# 4. Dùng l?i raw_text_for_fusion
 # ---------------------------------------------------------
 
 old_normalized_text_block = '''        normalized_text = self.make_json_safe(
@@ -142,7 +142,7 @@ if old_normalized_text_block in content:
     )
 
 # ---------------------------------------------------------
-# 5. Thay resolve_data_sources() bằng data_sources
+# 5. Thay resolve_data_sources() b?ng data_sources
 # ---------------------------------------------------------
 
 old_sources_block = '''                "dataSources": (
@@ -161,8 +161,8 @@ new_sources_block = '''                "dataSources": self.make_json_safe(
 if old_sources_block not in content:
     if '"dataSources": self.make_json_safe(' not in content:
         raise RuntimeError(
-            "Không tìm thấy block dataSources "
-            "cần thay thế."
+            "Không t́m th?y block dataSources "
+            "c?n thay th?."
         )
 else:
     content = content.replace(
@@ -177,7 +177,7 @@ pipeline_path.write_text(
 )
 
 print("=" * 68)
-print("TÍCH HỢP RESULT_FUSER VÀO OCR PIPELINE THÀNH CÔNG")
+print("TÍCH H?P RESULT_FUSER VÀO OCR PIPELINE THÀNH CÔNG")
 print("=" * 68)
 print(f"Pipeline: {pipeline_path}")
 print(f"Backup:   {backup_path}")

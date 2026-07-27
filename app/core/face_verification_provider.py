@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from threading import Lock
 
@@ -15,12 +15,12 @@ from app.modules.face_verification.verification_service import (
 
 class FaceVerificationProvider:
     """
-    Singleton Provider quản lý toàn bộ tài nguyên Face Verification.
+    Singleton Provider qu?n lư toàn b? tài nguyên Face Verification.
 
-    Mục tiêu:
-        - Chỉ load InsightFace một lần.
-        - Tái sử dụng model cho mọi request.
-        - Tránh mất thời gian khởi tạo model liên tục.
+    M?c tiêu:
+        - Ch? load InsightFace m?t l?n.
+        - Tái s? d?ng model cho m?i request.
+        - Tránh m?t th?i gian kh?i t?o model liên t?c.
     """
 
     _instance: "FaceVerificationProvider | None" = None
@@ -46,7 +46,7 @@ class FaceVerificationProvider:
     @classmethod
     def instance(cls) -> "FaceVerificationProvider":
         """
-        Lấy singleton provider.
+        L?y singleton provider.
         """
 
         if cls._instance is None:

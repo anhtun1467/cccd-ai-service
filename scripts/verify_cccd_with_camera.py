@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import sys
@@ -22,28 +22,28 @@ from app.modules.face_verification.portrait_extractor import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="So khớp chân dung CCCD với khuôn mặt webcam."
+        description="So kh?p chân dung CCCD v?i khuôn m?t webcam."
     )
 
     parser.add_argument(
         "--image",
         required=True,
         type=str,
-        help="Đường dẫn ảnh mặt trước CCCD.",
+        help="Đu?ng d?n ?nh m?t tru?c CCCD.",
     )
 
     parser.add_argument(
         "--camera",
         type=int,
         default=0,
-        help="Camera index, mặc định là 0.",
+        help="Camera index, m?c d?nh là 0.",
     )
 
     parser.add_argument(
         "--threshold",
         type=float,
         default=0.45,
-        help="Ngưỡng cosine similarity.",
+        help="Ngu?ng cosine similarity.",
     )
 
     return parser.parse_args()
@@ -53,16 +53,16 @@ def capture_live_face(
     camera: cv2.VideoCapture,
 ) -> object | None:
     print()
-    print("Đưa khuôn mặt vào giữa camera.")
-    print("Nhấn S để chụp.")
-    print("Nhấn Q hoặc ESC để hủy.")
+    print("Đua khuôn m?t vào gi?a camera.")
+    print("Nh?n S d? ch?p.")
+    print("Nh?n Q ho?c ESC d? h?y.")
 
     while True:
         success, frame = camera.read()
 
         if not success or frame is None:
             raise RuntimeError(
-                "Không đọc được frame từ webcam."
+                "Không d?c du?c frame t? webcam."
             )
 
         preview = frame.copy()
@@ -125,14 +125,14 @@ def main() -> None:
 
     if not image_path.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy ảnh CCCD: {image_path}"
+            f"Không t́m th?y ?nh CCCD: {image_path}"
         )
 
     card_image = cv2.imread(str(image_path))
 
     if card_image is None:
         raise ValueError(
-            f"OpenCV không đọc được ảnh: {image_path}"
+            f"OpenCV không d?c du?c ?nh: {image_path}"
         )
 
     output_dir = (
@@ -157,11 +157,11 @@ def main() -> None:
     print("Model: buffalo_l")
     print("=" * 64)
 
-    print("\n[1/5] Khởi tạo Portrait Extractor...")
+    print("\n[1/5] Kh?i t?o Portrait Extractor...")
 
     portrait_extractor = CCCDPortraitExtractor()
 
-    print("[2/5] Trích xuất chân dung từ CCCD...")
+    print("[2/5] Trích xu?t chân dung t? CCCD...")
 
     portrait_result = portrait_extractor.extract(
         card_image
@@ -197,7 +197,7 @@ def main() -> None:
         f"{portrait_result.detection_score:.4f}"
     )
 
-    print("[3/5] Khởi tạo Face Embedder...")
+    print("[3/5] Kh?i t?o Face Embedder...")
 
     embedder = InsightFaceEmbedder(
         model_name="buffalo_l",
@@ -206,7 +206,7 @@ def main() -> None:
         providers=["CPUExecutionProvider"],
     )
 
-    print("[4/5] Trích xuất embedding CCCD...")
+    print("[4/5] Trích xu?t embedding CCCD...")
 
     cccd_embedding_result = embedder.extract_single(
         portrait_image
@@ -214,7 +214,7 @@ def main() -> None:
 
     if cccd_embedding_result is None:
         raise RuntimeError(
-            "Không thể trích xuất embedding từ chân dung CCCD."
+            "Không th? trích xu?t embedding t? chân dung CCCD."
         )
 
     camera = cv2.VideoCapture(
@@ -224,7 +224,7 @@ def main() -> None:
 
     if not camera.isOpened():
         raise RuntimeError(
-            f"Không thể mở camera index {args.camera}."
+            f"Không th? m? camera index {args.camera}."
         )
 
     camera.set(
@@ -249,7 +249,7 @@ def main() -> None:
         cv2.destroyAllWindows()
 
     if webcam_image is None:
-        print("Đã hủy xác minh.")
+        print("Đă h?y xác minh.")
         return
 
     webcam_path = output_dir / "webcam_face.jpg"
@@ -259,7 +259,7 @@ def main() -> None:
         webcam_image,
     )
 
-    print("[5/5] Trích xuất embedding webcam và so khớp...")
+    print("[5/5] Trích xu?t embedding webcam và so kh?p...")
 
     webcam_embedding_result = embedder.extract_single(
         webcam_image
@@ -267,7 +267,7 @@ def main() -> None:
 
     if webcam_embedding_result is None:
         raise RuntimeError(
-            "Không phát hiện được khuôn mặt trong ảnh webcam."
+            "Không phát hi?n du?c khuôn m?t trong ?nh webcam."
         )
 
     matcher = CosineFaceMatcher(
@@ -281,7 +281,7 @@ def main() -> None:
 
     print()
     print("=" * 64)
-    print("KẾT QUẢ XÁC MINH")
+    print("K?T QU? XÁC MINH")
     print("=" * 64)
     print(
         f"CCCD detection score: "
@@ -305,9 +305,9 @@ def main() -> None:
     )
 
     if match_result.is_match:
-        print("Kết luận: MATCH - Khuôn mặt trùng khớp")
+        print("K?t lu?n: MATCH - Khuôn m?t trùng kh?p")
     else:
-        print("Kết luận: NOT MATCH - Khuôn mặt không trùng khớp")
+        print("K?t lu?n: NOT MATCH - Khuôn m?t không trùng kh?p")
 
     print("=" * 64)
     print(f"CCCD portrait: {portrait_path}")

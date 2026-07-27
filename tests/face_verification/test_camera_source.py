@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import cv2
 
@@ -10,10 +10,10 @@ from app.modules.face_verification.sources.opencv_source import (
 
 def test_c922_capture_frame() -> None:
     """
-    Kiểm tra camera có thể mở và đọc frame.
+    Ki?m tra camera có th? m? và d?c frame.
 
-    Lưu ý:
-        Đây là integration test vì cần camera thật.
+    Luu ư:
+        Đây là integration test v́ c?n camera th?t.
     """
     config = CameraConfig(
         device_index=0,

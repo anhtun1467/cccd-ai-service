@@ -1,11 +1,10 @@
-```python
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 
-# Thêm thư mục gốc của project vào PYTHONPATH để import được package app.
+# ThÃªm thÆ° má»¥c gá»‘c cá»§a project vÃ o PYTHONPATH Ä‘á»ƒ import Ä‘Æ°á»£c package app.
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 if str(ROOT_DIR) not in sys.path:
@@ -20,7 +19,7 @@ def run_test(
     expected_text: str,
 ) -> bool:
     """
-    Chạy một trường hợp kiểm thử OCRTextNormalizer.
+    Cháº¡y má»™t trÆ°á»ng há»£p kiá»ƒm thá»­ OCRTextNormalizer.
     """
 
     actual_text = OCRTextNormalizer.normalize(input_text)
@@ -96,12 +95,11 @@ def main() -> None:
 
     if failed_count > 0:
         raise AssertionError(
-            f"Có {failed_count} trường hợp kiểm thử chưa đạt."
+            f"CÃ³ {failed_count} trÆ°á»ng há»£p kiá»ƒm thá»­ chÆ°a Ä‘áº¡t."
         )
 
-    print("Tất cả test OCRTextNormalizer đều thành công.")
+    print("Táº¥t cáº£ test OCRTextNormalizer Ä‘á»u thÃ nh cÃ´ng.")
 
 
 if __name__ == "__main__":
     main()
-```

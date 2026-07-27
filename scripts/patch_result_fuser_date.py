@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 
 file_path = Path(
@@ -20,19 +20,19 @@ end_index = content.find(
 
 if start_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm normalize_date."
+        "Không t́m th?y hàm normalize_date."
     )
 
 if end_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm is_valid_full_name."
+        "Không t́m th?y hàm is_valid_full_name."
     )
 
 new_function = '''def normalize_date(value: str | None) -> str | None:
     """
-    Chuẩn hóa ngày tháng từ kết quả OCR.
+    Chu?n hóa ngày tháng t? k?t qu? OCR.
 
-    Các ví dụ được hỗ trợ:
+    Các ví d? du?c h? tr?:
         24/03/1995   -> 24/03/1995
         24/0311995   -> 24/03/1995
         2403/1995    -> 24/03/1995
@@ -59,7 +59,7 @@ new_function = '''def normalize_date(value: str | None) -> str | None:
     ] = []
 
     patterns = (
-        # Chuẩn: 24/03/1995
+        # Chu?n: 24/03/1995
         r"(?<!\\d)"
         r"(\\d{1,2})"
         r"[./\\\\-]"
@@ -68,7 +68,7 @@ new_function = '''def normalize_date(value: str | None) -> str | None:
         r"(\\d{4})"
         r"(?!\\d)",
 
-        # Mất dấu giữa tháng và năm:
+        # M?t d?u gi?a tháng và nam:
         # 24/0311995
         r"(?<!\\d)"
         r"(\\d{2})"
@@ -77,7 +77,7 @@ new_function = '''def normalize_date(value: str | None) -> str | None:
         r"(\\d{4})"
         r"(?!\\d)",
 
-        # Mất dấu giữa ngày và tháng:
+        # M?t d?u gi?a ngày và tháng:
         # 2403/1995
         r"(?<!\\d)"
         r"(\\d{2})"
@@ -86,7 +86,7 @@ new_function = '''def normalize_date(value: str | None) -> str | None:
         r"(\\d{4})"
         r"(?!\\d)",
 
-        # Mất toàn bộ dấu phân cách:
+        # M?t toàn b? d?u phân cách:
         # 24031995
         r"(?<!\\d)"
         r"(\\d{2})"
@@ -106,8 +106,8 @@ new_function = '''def normalize_date(value: str | None) -> str | None:
                 match.groups()
             )
 
-    # Phương án dự phòng: lấy chuỗi số gần ngày sinh.
-    # Xử lý trường hợp OCR tạo ra 9 chữ số như 240311995.
+    # Phuong án d? pḥng: l?y chu?i s? g?n ngày sinh.
+    # X? lư tru?ng h?p OCR t?o ra 9 ch? s? nhu 240311995.
     digit_sequences = re.findall(
         r"\\d+",
         text,
@@ -124,8 +124,8 @@ new_function = '''def normalize_date(value: str | None) -> str | None:
             )
 
         elif len(digit_sequence) == 9:
-            # Một số OCR có thể chèn dư một chữ số.
-            # Không tự đoán tùy tiện nếu chưa thể tạo ngày hợp lệ.
+            # M?t s? OCR có th? chèn du m?t ch? s?.
+            # Không t? doán tùy ti?n n?u chua th? t?o ngày h?p l?.
             possible_values = (
                 digit_sequence[:8],
                 digit_sequence[1:9],
@@ -186,5 +186,5 @@ file_path.write_text(
 )
 
 print(
-    "Đã cập nhật normalize_date thành công."
+    "Đă c?p nh?t normalize_date thành công."
 )

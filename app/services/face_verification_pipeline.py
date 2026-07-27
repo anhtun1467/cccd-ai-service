@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass
@@ -22,7 +22,7 @@ from app.modules.face_verification.verification_service import (
 @dataclass(frozen=True)
 class FaceVerificationPipelineOutput:
     """
-    Kết quả trả về từ pipeline Face Verification.
+    K?t qu? tr? v? t? pipeline Face Verification.
     """
 
     verification: FaceVerificationResult
@@ -47,27 +47,27 @@ class FaceVerificationPipelineOutput:
 
     def _build_message(self) -> str:
         if self.verification.status == "match":
-            return "Khuôn mặt trùng khớp với ảnh chân dung trên CCCD."
+            return "Khuôn m?t trùng kh?p v?i ?nh chân dung trên CCCD."
 
         if self.verification.status == "review":
             return (
-                "Độ tương đồng chưa đủ rõ ràng. "
-                "Cần kiểm tra thủ công hoặc chụp lại ảnh."
+                "Đ? tuong d?ng chua d? rơ ràng. "
+                "C?n ki?m tra th? công ho?c ch?p l?i ?nh."
             )
 
-        return "Khuôn mặt không trùng khớp với ảnh chân dung trên CCCD."
+        return "Khuôn m?t không trùng kh?p v?i ?nh chân dung trên CCCD."
 
 
 class FaceVerificationPipeline:
     """
-    Pipeline xử lý ảnh CCCD và ảnh webcam.
+    Pipeline x? lư ?nh CCCD và ?nh webcam.
 
-    Nhiệm vụ:
-        1. Kiểm tra dữ liệu ảnh.
-        2. Giải mã bytes thành ảnh OpenCV.
-        3. Gọi FaceVerificationService.
-        4. Lưu artifacts phục vụ debug.
-        5. Trả kết quả chuẩn hóa cho API.
+    Nhi?m v?:
+        1. Ki?m tra d? li?u ?nh.
+        2. Gi?i mă bytes thành ?nh OpenCV.
+        3. G?i FaceVerificationService.
+        4. Luu artifacts ph?c v? debug.
+        5. Tr? k?t qu? chu?n hóa cho API.
     """
 
     _verification_lock = Lock()
@@ -81,7 +81,7 @@ class FaceVerificationPipeline:
     ) -> None:
         if max_file_size_mb <= 0:
             raise ValueError(
-                "max_file_size_mb phải lớn hơn 0."
+                "max_file_size_mb ph?i l?n hon 0."
             )
 
         self.provider = (
@@ -101,26 +101,26 @@ class FaceVerificationPipeline:
         webcam_image_bytes: bytes,
     ) -> FaceVerificationPipelineOutput:
         """
-        Xử lý xác minh khuôn mặt từ dữ liệu ảnh dạng bytes.
+        X? lư xác minh khuôn m?t t? d? li?u ?nh d?ng bytes.
 
         Args:
             card_image_bytes:
-                Nội dung file ảnh CCCD.
+                N?i dung file ?nh CCCD.
 
             webcam_image_bytes:
-                Nội dung file ảnh chụp từ webcam.
+                N?i dung file ?nh ch?p t? webcam.
 
         Returns:
             FaceVerificationPipelineOutput.
 
         Raises:
             ValueError:
-                Khi dữ liệu file không hợp lệ hoặc OpenCV
-                không giải mã được ảnh.
+                Khi d? li?u file không h?p l? ho?c OpenCV
+                không gi?i mă du?c ?nh.
 
             RuntimeError:
-                Khi quá trình phát hiện hoặc xác minh khuôn mặt
-                không thực hiện được.
+                Khi quá tŕnh phát hi?n ho?c xác minh khuôn m?t
+                không th?c hi?n du?c.
         """
 
         self._validate_file_bytes(
@@ -135,18 +135,18 @@ class FaceVerificationPipeline:
 
         card_image = self._decode_image(
             card_image_bytes,
-            image_name="ảnh CCCD",
+            image_name="?nh CCCD",
         )
 
         webcam_image = self._decode_image(
             webcam_image_bytes,
-            image_name="ảnh webcam",
+            image_name="?nh webcam",
         )
 
         request_id = self._generate_request_id()
 
-        # InsightFace/ONNX Runtime có thể được gọi đồng thời từ nhiều
-        # request. Lock giúp giai đoạn đầu vận hành ổn định trên CPU.
+        # InsightFace/ONNX Runtime có th? du?c g?i d?ng th?i t? nhi?u
+        # request. Lock giúp giai do?n d?u v?n hành ?n d?nh trên CPU.
         with self._verification_lock:
             output = self.provider.service.verify(
                 card_image=card_image,
@@ -176,17 +176,17 @@ class FaceVerificationPipeline:
     ) -> None:
         if file_bytes is None:
             raise ValueError(
-                f"{file_name} không được là None."
+                f"{file_name} không du?c là None."
             )
 
         if not isinstance(file_bytes, bytes):
             raise TypeError(
-                f"{file_name} phải có kiểu bytes."
+                f"{file_name} ph?i có ki?u bytes."
             )
 
         if len(file_bytes) == 0:
             raise ValueError(
-                f"{file_name} không được rỗng."
+                f"{file_name} không du?c r?ng."
             )
 
         if len(file_bytes) > self.max_file_size_bytes:
@@ -197,7 +197,7 @@ class FaceVerificationPipeline:
             )
 
             raise ValueError(
-                f"{file_name} vượt quá dung lượng tối đa "
+                f"{file_name} vu?t quá dung lu?ng t?i da "
                 f"{max_size_mb:.0f} MB."
             )
 
@@ -218,8 +218,8 @@ class FaceVerificationPipeline:
 
         if image is None or image.size == 0:
             raise ValueError(
-                f"Không thể giải mã {image_name}. "
-                "Hãy sử dụng file JPG, JPEG hoặc PNG hợp lệ."
+                f"Không th? gi?i mă {image_name}. "
+                "Hăy s? d?ng file JPG, JPEG ho?c PNG h?p l?."
             )
 
         return image
@@ -318,7 +318,7 @@ class FaceVerificationPipeline:
 
         if not success:
             raise RuntimeError(
-                f"Không thể lưu ảnh debug: {path}"
+                f"Không th? luu ?nh debug: {path}"
             )
 
 

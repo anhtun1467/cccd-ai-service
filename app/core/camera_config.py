@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -8,29 +8,29 @@ import cv2
 @dataclass(frozen=True)
 class CameraConfig:
     """
-    Cấu hình kết nối camera bằng OpenCV.
+    C?u h́nh k?t n?i camera b?ng OpenCV.
 
     Attributes:
         device_index:
-            Chỉ số camera trên Windows.
+            Ch? s? camera trên Windows.
 
         width:
-            Chiều rộng hình ảnh mong muốn.
+            Chi?u r?ng h́nh ?nh mong mu?n.
 
         height:
-            Chiều cao hình ảnh mong muốn.
+            Chi?u cao h́nh ?nh mong mu?n.
 
         fps:
-            Số khung hình mỗi giây mong muốn.
+            S? khung h́nh m?i giây mong mu?n.
 
         backend:
-            Backend OpenCV sử dụng để mở camera.
+            Backend OpenCV s? d?ng d? m? camera.
 
         fourcc:
-            Chuẩn mã hóa video.
+            Chu?n mă hóa video.
 
         warmup_frames:
-            Số frame bỏ qua lúc camera mới khởi động.
+            S? frame b? qua lúc camera m?i kh?i d?ng.
     """
 
     device_index: int = 0

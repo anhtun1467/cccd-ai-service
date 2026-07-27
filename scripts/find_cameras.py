@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import time
 
@@ -11,10 +11,10 @@ def test_camera(
     backend_name: str,
 ) -> bool:
     """
-    Kiểm tra một camera index.
+    Ki?m tra m?t camera index.
 
     Returns:
-        True nếu camera mở và đọc được hình ảnh.
+        True n?u camera m? và d?c du?c h́nh ?nh.
     """
     camera = cv2.VideoCapture(index, backend)
 
@@ -56,7 +56,7 @@ def find_available_cameras(
     max_index: int = 10,
 ) -> list[int]:
     """
-    Tìm toàn bộ camera có thể sử dụng.
+    T́m toàn b? camera có th? s? d?ng.
     """
     available_indices: set[int] = set()
 

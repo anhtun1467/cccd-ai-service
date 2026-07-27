@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
 
-# Thêm thư mục gốc dự án vào Python path.
+# Thêm thu m?c g?c d? án vào Python path.
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 if str(ROOT_DIR) not in sys.path:

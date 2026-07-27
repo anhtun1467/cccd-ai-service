@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -14,7 +14,7 @@ from app.modules.face_verification.detector import (
 @dataclass(frozen=True)
 class PortraitExtractionResult:
     """
-    Kết quả trích xuất ảnh chân dung từ CCCD.
+    K?t qu? trích xu?t ?nh chân dung t? CCCD.
     """
 
     portrait: np.ndarray
@@ -27,13 +27,13 @@ class PortraitExtractionResult:
 
 class CCCDPortraitExtractor:
     """
-    Trích xuất ảnh chân dung từ mặt trước CCCD.
+    Trích xu?t ?nh chân dung t? m?t tru?c CCCD.
 
-    Chiến lược:
-    1. Phát hiện khuôn mặt trên toàn bộ ảnh thẻ.
-    2. Nếu thất bại, cắt vùng chân dung ước lượng bên trái.
-    3. Phát hiện lại khuôn mặt trong vùng ước lượng.
-    4. Nếu vẫn thất bại, trả về vùng chân dung ước lượng.
+    Chi?n lu?c:
+    1. Phát hi?n khuôn m?t trên toàn b? ?nh th?.
+    2. N?u th?t b?i, c?t vùng chân dung u?c lu?ng bên trái.
+    3. Phát hi?n l?i khuôn m?t trong vùng u?c lu?ng.
+    4. N?u v?n th?t b?i, tr? v? vùng chân dung u?c lu?ng.
     """
 
     def __init__(
@@ -44,12 +44,12 @@ class CCCDPortraitExtractor:
     ) -> None:
         if face_margin_ratio < 0:
             raise ValueError(
-                "face_margin_ratio không được nhỏ hơn 0."
+                "face_margin_ratio không du?c nh? hon 0."
             )
 
         if minimum_portrait_size <= 0:
             raise ValueError(
-                "minimum_portrait_size phải lớn hơn 0."
+                "minimum_portrait_size ph?i l?n hon 0."
             )
 
         self.detector = detector or InsightFaceDetector(
@@ -67,7 +67,7 @@ class CCCDPortraitExtractor:
         card_image: np.ndarray,
     ) -> PortraitExtractionResult:
         """
-        Trích xuất ảnh chân dung từ ảnh CCCD đã crop và căn thẳng.
+        Trích xu?t ?nh chân dung t? ?nh CCCD dă crop và can th?ng.
         """
 
         self._validate_image(card_image)
@@ -143,7 +143,7 @@ class CCCDPortraitExtractor:
         result: PortraitExtractionResult,
     ) -> np.ndarray:
         """
-        Vẽ vùng ảnh chân dung trên CCCD để debug.
+        V? vùng ?nh chân dung trên CCCD d? debug.
         """
 
         output = card_image.copy()
@@ -185,7 +185,7 @@ class CCCDPortraitExtractor:
         image_height: int,
     ) -> DetectedFace | None:
         """
-        Chọn khuôn mặt có khả năng là ảnh chân dung CCCD nhất.
+        Ch?n khuôn m?t có kh? nang là ?nh chân dung CCCD nh?t.
         """
 
         valid_faces: list[DetectedFace] = []
@@ -232,7 +232,7 @@ class CCCDPortraitExtractor:
         card_image: np.ndarray,
     ) -> tuple[np.ndarray, tuple[int, int, int, int]]:
         """
-        Lấy vùng ước lượng chứa ảnh chân dung trên CCCD.
+        L?y vùng u?c lu?ng ch?a ?nh chân dung trên CCCD.
         """
 
         image_height, image_width = card_image.shape[:2]
@@ -251,7 +251,7 @@ class CCCDPortraitExtractor:
 
         if roi.size == 0:
             raise ValueError(
-                "Không thể tạo vùng chân dung từ ảnh CCCD."
+                "Không th? t?o vùng chân dung t? ?nh CCCD."
             )
 
         return roi.copy(), (x1, y1, x2, y2)
@@ -275,7 +275,7 @@ class CCCDPortraitExtractor:
 
         if x2 <= x1 or y2 <= y1:
             raise ValueError(
-                "Bounding box khuôn mặt không hợp lệ."
+                "Bounding box khuôn m?t không h?p l?."
             )
 
         portrait = image[y1:y2, x1:x2].copy()
@@ -286,20 +286,20 @@ class CCCDPortraitExtractor:
     def _validate_image(image: np.ndarray) -> None:
         if image is None:
             raise ValueError(
-                "Ảnh CCCD không được là None."
+                "?nh CCCD không du?c là None."
             )
 
         if not isinstance(image, np.ndarray):
             raise TypeError(
-                "Ảnh CCCD phải là numpy.ndarray."
+                "?nh CCCD ph?i là numpy.ndarray."
             )
 
         if image.size == 0:
             raise ValueError(
-                "Ảnh CCCD đầu vào rỗng."
+                "?nh CCCD d?u vào r?ng."
             )
 
         if image.ndim != 3 or image.shape[2] != 3:
             raise ValueError(
-                "Ảnh CCCD phải có định dạng BGR 3 kênh."
+                "?nh CCCD ph?i có d?nh d?ng BGR 3 kênh."
             )

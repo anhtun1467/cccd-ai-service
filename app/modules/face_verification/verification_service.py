@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
@@ -29,7 +29,7 @@ VerificationStatus = Literal[
 @dataclass(frozen=True)
 class FaceVerificationResult:
     """
-    Kết quả xác minh khuôn mặt CCCD với ảnh webcam.
+    K?t qu? xác minh khuôn m?t CCCD v?i ?nh webcam.
     """
 
     status: VerificationStatus
@@ -52,7 +52,7 @@ class FaceVerificationResult:
 
     def to_dict(self) -> dict[str, object]:
         """
-        Chuyển kết quả thành dictionary để trả về API.
+        Chuy?n k?t qu? thành dictionary d? tr? v? API.
         """
 
         return {
@@ -83,7 +83,7 @@ class FaceVerificationResult:
 @dataclass(frozen=True)
 class FaceVerificationArtifacts:
     """
-    Dữ liệu trung gian phục vụ debug và lưu ảnh.
+    D? li?u trung gian ph?c v? debug và luu ?nh.
     """
 
     cccd_portrait: np.ndarray
@@ -95,7 +95,7 @@ class FaceVerificationArtifacts:
 @dataclass(frozen=True)
 class FaceVerificationOutput:
     """
-    Kết quả đầy đủ gồm dữ liệu nghiệp vụ và artifacts.
+    K?t qu? d?y d? g?m d? li?u nghi?p v? và artifacts.
     """
 
     result: FaceVerificationResult
@@ -104,14 +104,14 @@ class FaceVerificationOutput:
 
 class FaceVerificationService:
     """
-    Service xác minh khuôn mặt giữa CCCD và ảnh webcam.
+    Service xác minh khuôn m?t gi?a CCCD và ?nh webcam.
 
-    Luồng xử lý:
-    1. Trích xuất chân dung từ ảnh CCCD.
-    2. Trích xuất embedding chân dung CCCD.
-    3. Trích xuất embedding khuôn mặt webcam.
+    Lu?ng x? lư:
+    1. Trích xu?t chân dung t? ?nh CCCD.
+    2. Trích xu?t embedding chân dung CCCD.
+    3. Trích xu?t embedding khuôn m?t webcam.
     4. Tính cosine similarity.
-    5. Phân loại MATCH / REVIEW / NOT_MATCH.
+    5. Phân lo?i MATCH / REVIEW / NOT_MATCH.
     """
 
     def __init__(
@@ -123,17 +123,17 @@ class FaceVerificationService:
     ) -> None:
         if not -1.0 <= review_threshold <= 1.0:
             raise ValueError(
-                "review_threshold phải nằm trong khoảng -1 đến 1."
+                "review_threshold ph?i n?m trong kho?ng -1 d?n 1."
             )
 
         if not -1.0 <= match_threshold <= 1.0:
             raise ValueError(
-                "match_threshold phải nằm trong khoảng -1 đến 1."
+                "match_threshold ph?i n?m trong kho?ng -1 d?n 1."
             )
 
         if review_threshold >= match_threshold:
             raise ValueError(
-                "review_threshold phải nhỏ hơn match_threshold."
+                "review_threshold ph?i nh? hon match_threshold."
             )
 
         self.portrait_extractor = (
@@ -164,25 +164,25 @@ class FaceVerificationService:
         webcam_image: np.ndarray,
     ) -> FaceVerificationOutput:
         """
-        Xác minh khuôn mặt giữa ảnh CCCD và ảnh webcam.
+        Xác minh khuôn m?t gi?a ?nh CCCD và ?nh webcam.
 
         Args:
             card_image:
-                Ảnh mặt trước CCCD, định dạng BGR.
+                ?nh m?t tru?c CCCD, d?nh d?ng BGR.
 
             webcam_image:
-                Ảnh khuôn mặt chụp từ webcam, định dạng BGR.
+                ?nh khuôn m?t ch?p t? webcam, d?nh d?ng BGR.
 
         Returns:
             FaceVerificationOutput.
 
         Raises:
             ValueError:
-                Khi ảnh đầu vào không hợp lệ.
+                Khi ?nh d?u vào không h?p l?.
 
             RuntimeError:
-                Khi không phát hiện hoặc không trích xuất được
-                embedding khuôn mặt.
+                Khi không phát hi?n ho?c không trích xu?t du?c
+                embedding khuôn m?t.
         """
 
         self._validate_image(
@@ -207,7 +207,7 @@ class FaceVerificationService:
 
         if cccd_embedding_result is None:
             raise RuntimeError(
-                "Không thể trích xuất embedding từ "
+                "Không th? trích xu?t embedding t? "
                 "chân dung CCCD."
             )
 
@@ -217,8 +217,8 @@ class FaceVerificationService:
 
         if webcam_embedding_result is None:
             raise RuntimeError(
-                "Không phát hiện được khuôn mặt "
-                "trong ảnh webcam."
+                "Không phát hi?n du?c khuôn m?t "
+                "trong ?nh webcam."
             )
 
         match_result = self.matcher.compare(
@@ -275,7 +275,7 @@ class FaceVerificationService:
         similarity: float,
     ) -> VerificationStatus:
         """
-        Phân loại similarity thành ba mức.
+        Phân lo?i similarity thành ba m?c.
         """
 
         if similarity >= self.match_threshold:
@@ -293,20 +293,20 @@ class FaceVerificationService:
     ) -> None:
         if image is None:
             raise ValueError(
-                f"{image_name} không được là None."
+                f"{image_name} không du?c là None."
             )
 
         if not isinstance(image, np.ndarray):
             raise TypeError(
-                f"{image_name} phải là numpy.ndarray."
+                f"{image_name} ph?i là numpy.ndarray."
             )
 
         if image.size == 0:
             raise ValueError(
-                f"{image_name} không được rỗng."
+                f"{image_name} không du?c r?ng."
             )
 
         if image.ndim != 3 or image.shape[2] != 3:
             raise ValueError(
-                f"{image_name} phải là ảnh BGR 3 kênh."
+                f"{image_name} ph?i là ?nh BGR 3 kênh."
             )

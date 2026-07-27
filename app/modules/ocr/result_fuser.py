@@ -18,417 +18,618 @@ FIELD_NAMES = (
     "dateOfExpiry",
 )
 
-
 INVALID_NAME_WORDS = {
-    "HO",
-    "VA",
-    "TEN",
-    "FULL",
-    "NAME",
-    "NO",
-    "SO",
-    "IDENTITY",
-    "CARD",
-    "CITIZEN",
+    "HO", "VA", "TEN", "FULL", "NAME", "NO", "SO",
+    "IDENTITY", "CARD", "CITIZEN", "NGAY", "SINH",
+    "DATE", "OF", "BIRTH", "GIOI", "TINH", "SEX",
+    "QUOC", "TICH", "NATIONALITY",
 }
+
+STOP_LABEL_PATTERN = re.compile(
+    r"\b("
+    r"ho\s*va\s*ten|full\s*name|"
+    r"ngay\s*sinh|date\s*of\s*birth|"
+    r"gioi\s*tinh|sex|"
+    r"quoc\s*tich|nationality|"
+    r"que\s*quan|place\s*of\s*origin|"
+    r"noi\s*thuong\s*tru|place\s*of\s*residence|"
+    r"co\s*gia\s*tr[iyj1l]\s*den|date\s*of\s*expiry"
+    r")\b",
+    flags=re.IGNORECASE,
+)
 
 
 def remove_accents(value: str) -> str:
-    normalized = unicodedata.normalize("NFD", value)
-
-    return "".join(
+    normalized = unicodedata.normalize("NFD", str(value))
+    text = "".join(
         character
         for character in normalized
         if unicodedata.category(character) != "Mn"
     )
+    return text.replace("đ", "d").replace("Đ", "D")
 
 
 def normalize_spaces(value: str | None) -> str | None:
     if value is None:
         return None
-
     normalized = re.sub(r"\s+", " ", str(value)).strip()
-
     return normalized or None
 
 
 def normalize_ocr_digits(value: str) -> str:
-    translation_table = str.maketrans(
-        {
-            "O": "0",
-            "o": "0",
-            "I": "1",
-            "l": "1",
-            "|": "1",
-        }
+    return str(value).translate(
+        str.maketrans({
+            "O": "0", "o": "0",
+            "I": "1", "l": "1", "|": "1",
+        })
     )
-
-    return value.translate(translation_table)
 
 
 def normalize_date(value: str | None) -> str | None:
-    """
-    Chuẩn hóa ngày từ kết quả OCR.
-
-    Ví dụ:
-        24/03/1995  -> 24/03/1995
-        24-03-1995  -> 24/03/1995
-        24.03.1995  -> 24/03/1995
-        24031995    -> 24/03/1995
-        24/031995   -> 24/03/1995
-        24/0311995  -> 24/03/1995
-
-    Trường hợp 24/0311995 có một chữ số OCR bị lặp.
-    """
-
     if value is None:
         return None
 
-    text = normalize_ocr_digits(
-        str(value)
-    )
+    text = normalize_ocr_digits(value)
+    text = re.sub(r"\s+", "", text)
 
-    text = re.sub(
-        r"\s+",
-        "",
-        text,
-    )
-
-    def build_date(
-        digits: str,
-    ) -> str | None:
+    def build_date(digits: str) -> str | None:
         if len(digits) != 8:
             return None
 
-        day = digits[0:2]
-        month = digits[2:4]
-        year = digits[4:8]
-
-        candidate = (
-            f"{day}/{month}/{year}"
-        )
-
+        candidate = f"{digits[:2]}/{digits[2:4]}/{digits[4:]}"
         try:
-            parsed_date = datetime.strptime(
-                candidate,
-                "%d/%m/%Y",
-            )
+            parsed = datetime.strptime(candidate, "%d/%m/%Y")
         except ValueError:
             return None
 
-        if not 1900 <= parsed_date.year <= 2100:
+        if not 1900 <= parsed.year <= 2100:
             return None
-
         return candidate
 
-    # --------------------------------------------------
-    # 1. Thử định dạng đã có đủ dấu phân cách
-    # --------------------------------------------------
-
-    normal_match = re.search(
-        r"(?<!\d)"
-        r"(\d{1,2})"
-        r"[./\\-]"
-        r"(\d{1,2})"
-        r"[./\\-]"
-        r"(\d{4})"
-        r"(?!\d)",
+    match = re.search(
+        r"(?<!\d)(\d{1,2})[./\\-](\d{1,2})[./\\-](\d{4})(?!\d)",
         text,
     )
-
-    if normal_match:
-        day, month, year = normal_match.groups()
-
-        normalized_digits = (
-            f"{int(day):02d}"
-            f"{int(month):02d}"
-            f"{year}"
+    if match:
+        day, month, year = match.groups()
+        result = build_date(
+            f"{int(day):02d}{int(month):02d}{year}"
         )
+        if result:
+            return result
 
-        normalized_date = build_date(
-            normalized_digits
-        )
+    digits = "".join(re.findall(r"\d", text))
 
-        if normalized_date:
-            return normalized_date
-
-    # --------------------------------------------------
-    # 2. Lấy tất cả chữ số từ chuỗi OCR
-    # --------------------------------------------------
-
-    digits = "".join(
-        re.findall(
-            r"\d",
-            text,
-        )
-    )
-
-    # Ngày đã đủ 8 chữ số.
     if len(digits) == 8:
         return build_date(digits)
 
-    # --------------------------------------------------
-    # 3. OCR thừa một chữ số, tổng cộng 9 chữ số
-    # --------------------------------------------------
-
     if len(digits) == 9:
-        candidate_digit_strings: list[str] = []
+        candidates: list[str] = []
 
-        # Ưu tiên loại bỏ một chữ số trong cặp bị lặp.
-        #
-        # Ví dụ:
-        # 240311995
-        #     ^^
-        #
-        # Bỏ một số 1:
-        # 24031995
-        for index in range(
-            len(digits) - 1
-        ):
+        for index in range(8):
             if digits[index] == digits[index + 1]:
-                candidate_digit_strings.append(
-                    digits[:index]
-                    + digits[index + 1:]
+                candidates.append(
+                    digits[:index] + digits[index + 1:]
                 )
 
-        # Nếu không phải lỗi lặp rõ ràng, thử loại bỏ
-        # từng chữ số và kiểm tra ngày hợp lệ.
-        for index in range(len(digits)):
-            candidate = (
-                digits[:index]
-                + digits[index + 1:]
-            )
+        for index in range(9):
+            candidate = digits[:index] + digits[index + 1:]
+            if candidate not in candidates:
+                candidates.append(candidate)
 
-            if candidate not in candidate_digit_strings:
-                candidate_digit_strings.append(
-                    candidate
-                )
-
-        for candidate_digits in candidate_digit_strings:
-            normalized_date = build_date(
-                candidate_digits
-            )
-
-            if normalized_date:
-                return normalized_date
-
-    # --------------------------------------------------
-    # 4. Tìm cụm 8 hoặc 9 chữ số trong chuỗi dài
-    # --------------------------------------------------
-
-    digit_sequences = re.findall(
-        r"\d{8,9}",
-        text,
-    )
-
-    for sequence in digit_sequences:
-        if len(sequence) == 8:
-            normalized_date = build_date(
-                sequence
-            )
-
-            if normalized_date:
-                return normalized_date
-
-        if len(sequence) == 9:
-            for index in range(
-                len(sequence) - 1
-            ):
-                if (
-                    sequence[index]
-                    == sequence[index + 1]
-                ):
-                    candidate = (
-                        sequence[:index]
-                        + sequence[index + 1:]
-                    )
-
-                    normalized_date = build_date(
-                        candidate
-                    )
-
-                    if normalized_date:
-                        return normalized_date
+        for candidate in candidates:
+            result = build_date(candidate)
+            if result:
+                return result
 
     return None
 
 
-def is_valid_full_name(value: str | None) -> bool:
+def normalize_id_number(value: str | None) -> str | None:
     if not value:
-        return False
+        return None
 
-    normalized = remove_accents(value).upper()
-    normalized = re.sub(r"[^A-Z\s]", " ", normalized)
-    words = normalized.split()
+    digits = re.sub(r"\D", "", normalize_ocr_digits(value))
+    match = re.search(r"\d{12}", digits)
+    return match.group(0) if match else None
 
-    if not 2 <= len(words) <= 8:
-        return False
 
-    if any(word.isdigit() for word in words):
-        return False
+def _plain(value: str | None) -> str:
+    if not value:
+        return ""
+    text = remove_accents(value).lower()
+    text = re.sub(r"[^a-z0-9/,;:\-\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
-    meaningful_words = [
-        word
-        for word in words
-        if word not in INVALID_NAME_WORDS
-    ]
 
-    # Một họ tên hợp lệ phải còn tối thiểu hai từ có nghĩa
-    # sau khi loại các nhãn như HO VA TEN, FULL NAME.
-    return len(meaningful_words) >= 2
+def _truncate_at_next_label(value: str) -> str:
+    match = STOP_LABEL_PATTERN.search(value)
+    if not match:
+        return value
+    return value[:match.start()]
 
 
 def normalize_full_name(value: str | None) -> str | None:
-    if not is_valid_full_name(value):
-        return None
-
-    normalized = normalize_spaces(value)
-
-    if normalized is None:
-        return None
-
-    normalized = re.sub(
-        r"[^A-Za-zÀ-ỹĐđ\s]",
-        " ",
-        normalized,
-    )
-
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        normalized,
-    ).strip()
-
-    return normalized.upper() or None
-
-
-def normalize_nationality(
-    value: str | None,
-) -> str | None:
     if not value:
         return None
 
-    normalized = remove_accents(value).lower()
-    normalized = re.sub(
-        r"[^a-z\s]",
-        " ",
-        normalized,
-    )
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        normalized,
-    ).strip()
+    text = remove_accents(value).upper()
+    text = _truncate_at_next_label(text)
+    text = re.sub(r"[^A-Z\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
 
-    compact = normalized.replace(" ", "")
+    words = [
+        word for word in text.split()
+        if word not in INVALID_NAME_WORDS
+    ]
 
-    if (
-        "vietnam" in compact
-        or "vietnan" in compact
-        or compact in {"vn", "vnm"}
-    ):
-        return "Viet Nam"
-
-    # Không chấp nhận các token OCR vô nghĩa như "Mre".
-    if len(normalized) < 5:
+    if not 2 <= len(words) <= 7:
         return None
 
-    return value.strip()
+    if any(len(word) == 1 for word in words):
+        return None
+
+    return " ".join(words)
+
+
+def normalize_nationality(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    compact = re.sub(r"[^a-z]", "", _plain(value))
+    if "vietnam" in compact or "vietnan" in compact:
+        return "Viet Nam"
+    return None
+
+
+def normalize_gender(value: str | None) -> str | None:
+    """
+    Chuẩn hóa giới tính CCCD.
+
+    Quy ước:
+        Nam -> Nam
+        Nữ  -> Nu
+
+    Chấp nhận các lỗi OCR thường gặp:
+        Nu, Nữ, Ni, Nw, Nv, Nii -> Nu
+
+    Không nhận "Nam" trong "Viet Nam".
+    """
+
+    if not value:
+        return None
+
+    text = remove_accents(str(value))
+    text = text.lower().strip()
+
+    # Chỉ giữ chữ cái
+    text = re.sub(r"[^a-z]", "", text)
+
+    # Giá trị rỗng
+    if not text:
+        return None
+
+    # ====== NỮ ======
+    if text in {
+        "nu",
+        "female",
+        "ni",
+        "nw",
+        "nv",
+        "nii",
+        "nuu",
+    }:
+        return "Nu"
+
+    # ====== NAM ======
+    # Chỉ chấp nhận đúng "nam", không dùng substring.
+    if text in {
+        "nam",
+        "male",
+    }:
+        return "Nam"
+
+    return None
+
+def _extract_after_label(
+    line: str,
+    label_pattern: str,
+) -> str:
+    match = re.search(label_pattern, line, flags=re.IGNORECASE)
+    if not match:
+        return ""
+
+    suffix = line[match.end():]
+    suffix = _truncate_at_next_label(suffix)
+    return suffix.strip(" :;,/-")
+
+
+def _extract_before_label(
+    line: str,
+    label_pattern: str,
+) -> str:
+    match = re.search(label_pattern, line, flags=re.IGNORECASE)
+    if not match:
+        return ""
+
+    prefix = line[:match.start()]
+    return prefix.strip(" :;,/-")
+
+
+def recover_full_name(raw_text: list[str] | None) -> str | None:
+    lines = [str(line) for line in raw_text or [] if line]
+
+    label_pattern = r"(?:ho\s*va\s*ten\s*/?\s*|full\s*name\s*:?)"
+
+    for index, line in enumerate(lines):
+        plain_line = remove_accents(line)
+
+        if not re.search(label_pattern, plain_line, flags=re.IGNORECASE):
+            continue
+
+        suffix = _extract_after_label(plain_line, label_pattern)
+        candidate = normalize_full_name(suffix)
+
+        if candidate:
+            return candidate
+
+        for next_line in lines[index + 1:index + 3]:
+            candidate = normalize_full_name(next_line)
+            if candidate:
+                return candidate
+
+    return None
+
+
+def recover_gender(
+    raw_text: list[str] | None,
+) -> str | None:
+    """
+    Phục hồi giới tính từ đúng dòng chứa nhãn Giới tính / Sex.
+
+    Ví dụ:
+        Gioi tinh / Sex: Nu Quoc tich / Nationality: Viet Nam
+
+    Kết quả:
+        Nu
+
+    Phần Quốc tịch bị cắt bỏ trước khi chuẩn hóa để chữ
+    "Nam" trong "Viet Nam" không gây nhận sai.
+    """
+
+    if not raw_text:
+        return None
+
+    for raw_line in raw_text:
+        if not raw_line:
+            continue
+
+        line = remove_accents(
+            str(raw_line)
+        )
+
+        normalized_line = re.sub(
+            r"\s+",
+            " ",
+            line,
+        ).strip()
+
+        # Chỉ xét các dòng có nhãn giới tính.
+        if not re.search(
+            r"\b(?:gioi\s*tinh|sex)\b",
+            normalized_line,
+            flags=re.IGNORECASE,
+        ):
+            continue
+
+        # Cắt bỏ toàn bộ phần quốc tịch phía sau.
+        gender_section = re.split(
+            r"\b(?:quoc\s*tich|nationality)\b",
+            normalized_line,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+
+        # Lấy nội dung sau nhãn Sex: nếu có.
+        sex_match = re.search(
+            r"\bsex\b\s*[:/\-]?\s*(.*)$",
+            gender_section,
+            flags=re.IGNORECASE,
+        )
+
+        if sex_match:
+            gender_value = sex_match.group(1)
+        else:
+            # Fallback lấy sau nhãn Giới tính.
+            gender_match = re.search(
+                r"\bgioi\s*tinh\b"
+                r"\s*[:/\-]?\s*"
+                r"(.*)$",
+                gender_section,
+                flags=re.IGNORECASE,
+            )
+
+            if not gender_match:
+                continue
+
+            gender_value = gender_match.group(1)
+
+        # Xóa nhãn Sex còn sót nếu OCR ghép dạng:
+        # Gioi tinh / Sex: Nu
+        gender_value = re.sub(
+            r"^\s*/?\s*sex\s*[:/\-]?\s*",
+            "",
+            gender_value,
+            flags=re.IGNORECASE,
+        )
+
+        gender = normalize_gender(
+            gender_value
+        )
+
+        if gender:
+            return gender
+
+    return None
+
+
+def recover_nationality(raw_text: list[str] | None) -> str | None:
+    label_pattern = r"(?:quoc\s*tich\s*/?\s*|nationality\s*:?)"
+
+    for line in raw_text or []:
+        plain_line = remove_accents(str(line))
+
+        if not re.search(label_pattern, plain_line, flags=re.IGNORECASE):
+            continue
+
+        value = _extract_after_label(plain_line, label_pattern)
+        nationality = normalize_nationality(value)
+
+        if nationality:
+            return nationality
+
+    return None
+
+
+def recover_labeled_date(
+    raw_text: list[str] | None,
+    field_name: str,
+) -> str | None:
+    patterns = {
+        "dateOfBirth": r"(?:ngay\s*sinh\s*/?\s*|date\s*of\s*birth\s*:?)",
+        "dateOfExpiry": (
+            r"(?:co\s*gia\s*tr[iyj1l]\s*den\s*:?"
+            r"|date\s*of\s*expiry\s*:?)"
+        ),
+    }
+
+    label_pattern = patterns[field_name]
+
+    for line in raw_text or []:
+        plain_line = remove_accents(str(line))
+
+        if not re.search(label_pattern, plain_line, flags=re.IGNORECASE):
+            continue
+
+        value = _extract_after_label(plain_line, label_pattern)
+        date = normalize_date(value)
+
+        if date:
+            return date
+
+        date = normalize_date(plain_line)
+        if date:
+            return date
+
+    return None
+
+
+def _clean_address_text(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    text = remove_accents(value)
+    text = re.sub(
+        r"\b(?:que\s*quan|place\s*of\s*origin|"
+        r"noi\s*thuong\s*tru|place\s*of\s*residence|"
+        r"co\s*gia\s*tr[iyj1l]\s*den|date\s*of\s*expiry)"
+        r"\b\s*:?",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b",
+        " ",
+        text,
+    )
+    text = text.replace(";", ",")
+    text = re.sub(r"\s*,\s*", ", ", text)
+    text = re.sub(r",(?:\s*,)+", ", ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip(" ,/:;-")
+
+    return text or None
+
+
+def recover_address(
+    raw_text: list[str] | None,
+    field_name: str,
+) -> str | None:
+    """Phục hồi địa chỉ từ nhãn và các dòng OCR kế tiếp.
+
+    Hàm lấy cả phần giá trị nằm cùng dòng với nhãn, ví dụ
+    ``Place of residence: Pho Voi``, rồi ghép thêm các dòng địa chỉ
+    phía dưới cho đến khi gặp nhãn trường tiếp theo.
+    """
+    lines = [
+        remove_accents(str(line))
+        for line in raw_text or []
+        if line
+    ]
+
+    if field_name == "placeOfOrigin":
+        label_pattern = (
+            r"(?:que\s*quan\s*/?\s*"
+            r"(?:place\s*of\s*origin)?"
+            r"|place\s*of\s*origin)\s*:?"
+        )
+        stop_pattern = (
+            r"\b(?:noi\s*thuong\s*tru|place\s*of\s*residence|"
+            r"co\s*gia\s*tr[iyj1l]\s*den|date\s*of\s*expiry)\b"
+        )
+        max_pieces = 2
+    else:
+        label_pattern = (
+            r"(?:noi\s*thuong\s*tru\s*/?\s*"
+            r"(?:place\s*of\s*residence)?"
+            r"|place\s*of\s*residence)\s*:?"
+        )
+        stop_pattern = (
+            r"\b(?:co\s*gia\s*tr[iyj1l]\s*den|"
+            r"date\s*of\s*expiry)\b"
+        )
+        max_pieces = 3
+
+    for index, line in enumerate(lines):
+        label_match = re.search(
+            label_pattern,
+            line,
+            flags=re.IGNORECASE,
+        )
+        if not label_match:
+            continue
+
+        pieces: list[str] = []
+
+        before = line[:label_match.start()].strip(" :;,/-")
+        after = line[label_match.end():].strip(" :;,/-")
+
+        if before and not STOP_LABEL_PATTERN.search(before):
+            pieces.append(before)
+
+        if after:
+            pieces.append(after)
+
+        for next_line in lines[index + 1:index + 4]:
+            if re.search(stop_pattern, next_line, flags=re.IGNORECASE):
+                break
+
+            if STOP_LABEL_PATTERN.search(next_line):
+                break
+
+            cleaned_line = next_line.strip(" :;,/-")
+            if cleaned_line:
+                pieces.append(cleaned_line)
+
+            if len(pieces) >= max_pieces:
+                break
+
+        candidate = _clean_address_text(", ".join(pieces))
+
+        if candidate and is_valid_address(candidate, field_name):
+            return candidate
+
+    return None
+
+def is_valid_address(
+    value: str | None,
+    field_name: str,
+) -> bool:
+    if not value:
+        return False
+
+    text = _plain(value)
+    tokens = re.findall(r"[a-z0-9]+", text)
+
+    if len(tokens) < 3:
+        return False
+
+    single_tokens = [token for token in tokens if len(token) == 1]
+    if len(single_tokens) >= 3:
+        return False
+
+    forbidden = (
+        "full name", "date of birth", "gioi tinh", "sex",
+        "quoc tich", "nationality", "date of expiry",
+        "co gia tri den",
+    )
+    if any(label in text for label in forbidden):
+        return False
+
+    if field_name == "placeOfOrigin":
+        if sum(character.isdigit() for character in text) > 2:
+            return False
+
+    noise_words = {
+        "fiaco", "onyu", "notmuong", "uliesicetce",
+        "deleiabexpiry", "codauden", "ogiatno1n",
+        "fresidencethon", "thackcks", "thackho",
+    }
+    if sum(token in noise_words for token in tokens) >= 1:
+        return False
+
+    return True
+
+
+def select_address(
+    field_name: str,
+    field_value: str | None,
+    full_card_value: str | None,
+    raw_text: list[str] | None,
+) -> tuple[str | None, str]:
+    raw_value = recover_address(raw_text, field_name)
+    full_value = _clean_address_text(full_card_value)
+    field_clean = _clean_address_text(field_value)
+
+    if raw_value and is_valid_address(raw_value, field_name):
+        return raw_value, "RAW_TEXT_RECOVERY"
+
+    if full_value and is_valid_address(full_value, field_name):
+        return full_value, "FULL_CARD_OCR"
+
+    if field_clean and is_valid_address(field_clean, field_name):
+        return field_clean, "FIELD_OCR"
+
+    return None, "NOT_FOUND"
 
 
 def select_full_name(
     field_value: str | None,
     full_card_value: str | None,
+    raw_text: list[str] | None,
 ) -> tuple[str | None, str]:
-    field_name = normalize_full_name(field_value)
-    full_card_name = normalize_full_name(full_card_value)
+    raw_name = recover_full_name(raw_text)
+    if raw_name:
+        return raw_name, "RAW_TEXT_RECOVERY"
 
+    full_name = normalize_full_name(full_card_value)
+    if full_name:
+        return full_name, "FULL_CARD_OCR"
+
+    field_name = normalize_full_name(field_value)
     if field_name:
         return field_name, "FIELD_OCR"
-
-    if full_card_name:
-        return full_card_name, "FULL_CARD_OCR"
 
     return None, "NOT_FOUND"
 
 
-def select_date(
+def select_gender(
     field_value: str | None,
     full_card_value: str | None,
     raw_text: list[str] | None,
 ) -> tuple[str | None, str]:
-    """
-    Chọn và chuẩn hóa ngày sinh từ nhiều nguồn OCR.
+    raw_gender = recover_gender(raw_text)
+    if raw_gender:
+        return raw_gender, "RAW_TEXT_RECOVERY"
 
-    Thứ tự ưu tiên:
-        1. OCR theo vùng field.
-        2. OCR toàn bộ CCCD.
-        3. Phục hồi từ từng dòng raw text.
-    """
+    full_gender = normalize_gender(full_card_value)
+    if full_gender:
+        return full_gender, "FULL_CARD_OCR"
 
-    field_date = normalize_date(
-        field_value
-    )
-
-    if field_date:
-        return field_date, "FIELD_OCR"
-
-    full_card_date = normalize_date(
-        full_card_value
-    )
-
-    if full_card_date:
-        return (
-            full_card_date,
-            "FULL_CARD_OCR",
-        )
-
-    for line in raw_text or []:
-        if not line:
-            continue
-
-        line_text = str(line)
-
-        # Ví dụ:
-        # Ngay sinh / Date of birth: 24/0311995
-        #
-        # Phần được lấy:
-        # 24/0311995
-        date_candidates = re.findall(
-            r"(?<!\d)"
-            r"\d{1,2}"
-            r"\s*[./\\-]\s*"
-            r"\d{2,7}"
-            r"(?!\d)",
-            line_text,
-        )
-
-        # Hỗ trợ ngày mất toàn bộ dấu phân cách:
-        # 24031995
-        #
-        # Hoặc OCR bị thừa một chữ số:
-        # 240311995
-        compact_candidates = re.findall(
-            r"(?<!\d)"
-            r"\d{8,9}"
-            r"(?!\d)",
-            line_text,
-        )
-
-        date_candidates.extend(
-            compact_candidates
-        )
-
-        for candidate in date_candidates:
-            recovered_date = normalize_date(
-                candidate
-            )
-
-            if recovered_date:
-                return (
-                    recovered_date,
-                    "RAW_TEXT_RECOVERY",
-                )
+    field_gender = normalize_gender(field_value)
+    if field_gender:
+        return field_gender, "FIELD_OCR"
 
     return None, "NOT_FOUND"
 
@@ -438,28 +639,38 @@ def select_nationality(
     full_card_value: str | None,
     raw_text: list[str] | None,
 ) -> tuple[str | None, str]:
-    field_nationality = normalize_nationality(
-        field_value
-    )
+    raw_value = recover_nationality(raw_text)
+    if raw_value:
+        return raw_value, "RAW_TEXT_RECOVERY"
 
-    if field_nationality:
-        return field_nationality, "FIELD_OCR"
+    full_value = normalize_nationality(full_card_value)
+    if full_value:
+        return full_value, "FULL_CARD_OCR"
 
-    full_card_nationality = normalize_nationality(
-        full_card_value
-    )
+    field_value_normalized = normalize_nationality(field_value)
+    if field_value_normalized:
+        return field_value_normalized, "FIELD_OCR"
 
-    if full_card_nationality:
-        return (
-            full_card_nationality,
-            "FULL_CARD_OCR",
-        )
+    return None, "NOT_FOUND"
 
-    for line in raw_text or []:
-        raw_nationality = normalize_nationality(line)
 
-        if raw_nationality == "Viet Nam":
-            return "Viet Nam", "RAW_TEXT_RECOVERY"
+def select_date(
+    field_name: str,
+    field_value: str | None,
+    full_card_value: str | None,
+    raw_text: list[str] | None,
+) -> tuple[str | None, str]:
+    raw_value = recover_labeled_date(raw_text, field_name)
+    if raw_value:
+        return raw_value, "RAW_TEXT_RECOVERY"
+
+    full_value = normalize_date(full_card_value)
+    if full_value:
+        return full_value, "FULL_CARD_OCR"
+
+    field_value_normalized = normalize_date(field_value)
+    if field_value_normalized:
+        return field_value_normalized, "FIELD_OCR"
 
     return None, "NOT_FOUND"
 
@@ -469,15 +680,6 @@ def fuse_ocr_data(
     field_data: dict[str, Any] | None,
     raw_text: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """
-    Hợp nhất kết quả OCR toàn thẻ và OCR theo vùng.
-
-    Nguyên tắc:
-        - Chỉ dùng field OCR khi giá trị hợp lệ.
-        - Nếu field OCR sai, fallback sang full-card OCR.
-        - Ngày sinh có thể được phục hồi từ raw text.
-    """
-
     full_card = full_card_data or {}
     fields = field_data or {}
 
@@ -486,43 +688,80 @@ def fuse_ocr_data(
 
     for field_name in FIELD_NAMES:
         result[field_name] = deepcopy(
-            fields.get(field_name)
-            or full_card.get(field_name)
+            full_card.get(field_name)
+            or fields.get(field_name)
+        )
+        sources[field_name] = (
+            "FULL_CARD_OCR"
+            if full_card.get(field_name)
+            else "FIELD_OCR"
+            if fields.get(field_name)
+            else "NOT_FOUND"
         )
 
-        if fields.get(field_name):
-            sources[field_name] = "FIELD_OCR"
-        elif full_card.get(field_name):
-            sources[field_name] = "FULL_CARD_OCR"
-        else:
-            sources[field_name] = "NOT_FOUND"
-
-    full_name, full_name_source = select_full_name(
-        fields.get("fullName"),
-        full_card.get("fullName"),
+    id_number = (
+        normalize_id_number(full_card.get("idNumber"))
+        or normalize_id_number(fields.get("idNumber"))
+    )
+    result["idNumber"] = id_number
+    sources["idNumber"] = (
+        "FULL_CARD_OCR"
+        if normalize_id_number(full_card.get("idNumber"))
+        else "FIELD_OCR"
+        if normalize_id_number(fields.get("idNumber"))
+        else "NOT_FOUND"
     )
 
+    full_name, source = select_full_name(
+        fields.get("fullName"),
+        full_card.get("fullName"),
+        raw_text,
+    )
     result["fullName"] = full_name
-    sources["fullName"] = full_name_source
+    sources["fullName"] = source
 
-    date_of_birth, date_source = select_date(
+    date_of_birth, source = select_date(
+        "dateOfBirth",
         fields.get("dateOfBirth"),
         full_card.get("dateOfBirth"),
         raw_text,
     )
-
     result["dateOfBirth"] = date_of_birth
-    sources["dateOfBirth"] = date_source
+    sources["dateOfBirth"] = source
 
-    nationality, nationality_source = (
-        select_nationality(
-            fields.get("nationality"),
-            full_card.get("nationality"),
+    gender, source = select_gender(
+        fields.get("gender"),
+        full_card.get("gender"),
+        raw_text,
+    )
+    result["gender"] = gender
+    sources["gender"] = source
+
+    nationality, source = select_nationality(
+        fields.get("nationality"),
+        full_card.get("nationality"),
+        raw_text,
+    )
+    result["nationality"] = nationality
+    sources["nationality"] = source
+
+    for field_name in ("placeOfOrigin", "placeOfResidence"):
+        value, source = select_address(
+            field_name,
+            fields.get(field_name),
+            full_card.get(field_name),
             raw_text,
         )
-    )
+        result[field_name] = value
+        sources[field_name] = source
 
-    result["nationality"] = nationality
-    sources["nationality"] = nationality_source
+    expiry, source = select_date(
+        "dateOfExpiry",
+        fields.get("dateOfExpiry"),
+        full_card.get("dateOfExpiry"),
+        raw_text,
+    )
+    result["dateOfExpiry"] = expiry
+    sources["dateOfExpiry"] = source
 
     return result, sources

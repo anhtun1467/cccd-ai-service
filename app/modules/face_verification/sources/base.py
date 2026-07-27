@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from types import TracebackType
@@ -9,41 +9,41 @@ import numpy as np
 
 class FaceImageSourceError(RuntimeError):
     """
-    Lỗi xảy ra khi mở hoặc đọc ảnh từ nguồn camera.
+    L?i x?y ra khi m? ho?c d?c ?nh t? ngu?n camera.
     """
 
 
 class FaceImageSource(ABC):
     """
-    Interface chung cho các nguồn ảnh khuôn mặt.
+    Interface chung cho các ngu?n ?nh khuôn m?t.
 
-    Sau này Logitech C922, camera IP hoặc ảnh từ máy chấm công
-    đều có thể triển khai theo interface này.
+    Sau này Logitech C922, camera IP ho?c ?nh t? máy ch?m công
+    d?u có th? tri?n khai theo interface này.
     """
 
     @abstractmethod
     def open(self) -> None:
         """
-        Mở kết nối tới nguồn ảnh.
+        M? k?t n?i t?i ngu?n ?nh.
         """
 
     @abstractmethod
     def capture_frame(self) -> np.ndarray:
         """
-        Chụp một frame.
+        Ch?p m?t frame.
 
         Returns:
-            Ảnh dạng NumPy BGR.
+            ?nh d?ng NumPy BGR.
 
         Raises:
             FaceImageSourceError:
-                Nếu nguồn chưa mở hoặc không đọc được frame.
+                N?u ngu?n chua m? ho?c không d?c du?c frame.
         """
 
     @abstractmethod
     def close(self) -> None:
         """
-        Đóng kết nối tới nguồn ảnh.
+        Đóng k?t n?i t?i ngu?n ?nh.
         """
 
     def __enter__(self) -> "FaceImageSource":

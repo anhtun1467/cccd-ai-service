@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -29,12 +29,12 @@ end_index = content.find(
 
 if start_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm select_date trong result_fuser.py."
+        "Không t́m th?y hàm select_date trong result_fuser.py."
     )
 
 if end_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm select_nationality "
+        "Không t́m th?y hàm select_nationality "
         "sau hàm select_date."
     )
 
@@ -44,12 +44,12 @@ new_function = r'''def select_date(
     raw_text: list[str] | None,
 ) -> tuple[str | None, str]:
     """
-    Chọn và chuẩn hóa ngày sinh từ nhiều nguồn OCR.
+    Ch?n và chu?n hóa ngày sinh t? nhi?u ngu?n OCR.
 
-    Thứ tự ưu tiên:
+    Th? t? uu tiên:
         1. OCR theo vùng field.
-        2. OCR toàn bộ CCCD.
-        3. Phục hồi từ từng dòng raw text.
+        2. OCR toàn b? CCCD.
+        3. Ph?c h?i t? t?ng ḍng raw text.
     """
 
     field_date = normalize_date(
@@ -75,10 +75,10 @@ new_function = r'''def select_date(
 
         line_text = str(line)
 
-        # Ví dụ:
+        # Ví d?:
         # Ngay sinh / Date of birth: 24/0311995
         #
-        # Phần được lấy:
+        # Ph?n du?c l?y:
         # 24/0311995
         date_candidates = re.findall(
             r"(?<!\d)"
@@ -89,10 +89,10 @@ new_function = r'''def select_date(
             line_text,
         )
 
-        # Hỗ trợ ngày mất toàn bộ dấu phân cách:
+        # H? tr? ngày m?t toàn b? d?u phân cách:
         # 24031995
         #
-        # Hoặc OCR bị thừa một chữ số:
+        # Ho?c OCR b? th?a m?t ch? s?:
         # 240311995
         compact_candidates = re.findall(
             r"(?<!\d)"
@@ -132,6 +132,6 @@ file_path.write_text(
 )
 
 print("=" * 64)
-print("ĐÃ CẬP NHẬT SELECT_DATE THÀNH CÔNG")
+print("ĐĂ C?P NH?T SELECT_DATE THÀNH CÔNG")
 print("=" * 64)
 print(file_path)

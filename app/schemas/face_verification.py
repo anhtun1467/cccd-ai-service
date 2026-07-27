@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Literal
 
@@ -14,86 +14,86 @@ VerificationStatus = Literal[
 
 class FaceVerificationResponse(BaseModel):
     """
-    Dữ liệu trả về sau khi đối chiếu khuôn mặt
-    giữa ảnh CCCD và ảnh webcam.
+    D? li?u tr? v? sau khi d?i chi?u khuôn m?t
+    gi?a ?nh CCCD và ?nh webcam.
     """
 
     success: bool = Field(
-        description="Cho biết pipeline có xử lý thành công hay không."
+        description="Cho bi?t pipeline có x? lư thành công hay không."
     )
 
     request_id: str = Field(
-        description="Mã định danh duy nhất của lần xác minh."
+        description="Mă d?nh danh duy nh?t c?a l?n xác minh."
     )
 
     status: VerificationStatus = Field(
-        description="Kết quả MATCH, REVIEW hoặc NOT_MATCH."
+        description="K?t qu? MATCH, REVIEW ho?c NOT_MATCH."
     )
 
     is_match: bool = Field(
-        description="True khi độ tương đồng đạt ngưỡng MATCH."
+        description="True khi d? tuong d?ng d?t ngu?ng MATCH."
     )
 
     needs_review: bool = Field(
-        description="True khi kết quả cần kiểm tra thủ công."
+        description="True khi k?t qu? c?n ki?m tra th? công."
     )
 
     message: str = Field(
-        description="Thông báo kết quả bằng tiếng Việt."
+        description="Thông báo k?t qu? b?ng ti?ng Vi?t."
     )
 
     similarity: float = Field(
         ge=-1.0,
         le=1.0,
-        description="Cosine similarity giữa hai khuôn mặt.",
+        description="Cosine similarity gi?a hai khuôn m?t.",
     )
 
     distance: float = Field(
         ge=0.0,
-        description="Khoảng cách được tính từ similarity.",
+        description="Kho?ng cách du?c tính t? similarity.",
     )
 
     match_threshold: float = Field(
         ge=-1.0,
         le=1.0,
-        description="Ngưỡng xác định khuôn mặt trùng khớp.",
+        description="Ngu?ng xác d?nh khuôn m?t trùng kh?p.",
     )
 
     review_threshold: float = Field(
         ge=-1.0,
         le=1.0,
-        description="Ngưỡng xác định trường hợp cần kiểm tra.",
+        description="Ngu?ng xác d?nh tru?ng h?p c?n ki?m tra.",
     )
 
     processing_time_ms: float = Field(
         ge=0.0,
-        description="Thời gian xử lý tính bằng mili giây.",
+        description="Th?i gian x? lư tính b?ng mili giây.",
     )
 
     cccd_detection_score: float = Field(
         ge=0.0,
         le=1.0,
-        description="Độ tin cậy phát hiện khuôn mặt trên CCCD.",
+        description="Đ? tin c?y phát hi?n khuôn m?t trên CCCD.",
     )
 
     webcam_detection_score: float = Field(
         ge=0.0,
         le=1.0,
-        description="Độ tin cậy phát hiện khuôn mặt webcam.",
+        description="Đ? tin c?y phát hi?n khuôn m?t webcam.",
     )
 
     portrait_method: str = Field(
-        description="Phương pháp trích xuất chân dung CCCD."
+        description="Phuong pháp trích xu?t chân dung CCCD."
     )
 
     portrait_bbox: tuple[int, int, int, int] = Field(
-        description="Tọa độ khuôn mặt trên ảnh CCCD."
+        description="T?a d? khuôn m?t trên ?nh CCCD."
     )
 
 
 class FaceVerificationErrorResponse(BaseModel):
     """
-    Dữ liệu lỗi chuẩn của API Face Verification.
+    D? li?u l?i chu?n c?a API Face Verification.
     """
 
     success: bool = False

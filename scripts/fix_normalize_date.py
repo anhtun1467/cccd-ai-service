@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 
 file_path = Path(
@@ -21,19 +21,19 @@ end_index = content.find(
 
 if start_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm normalize_date."
+        "Không t́m th?y hàm normalize_date."
     )
 
 if end_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm is_valid_full_name."
+        "Không t́m th?y hàm is_valid_full_name."
     )
 
 new_function = r'''def normalize_date(value: str | None) -> str | None:
     """
-    Chuẩn hóa ngày từ kết quả OCR.
+    Chu?n hóa ngày t? k?t qu? OCR.
 
-    Ví dụ:
+    Ví d?:
         24/03/1995  -> 24/03/1995
         24-03-1995  -> 24/03/1995
         24.03.1995  -> 24/03/1995
@@ -41,7 +41,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         24/031995   -> 24/03/1995
         24/0311995  -> 24/03/1995
 
-    Trường hợp 24/0311995 có một chữ số OCR bị lặp.
+    Tru?ng h?p 24/0311995 có m?t ch? s? OCR b? l?p.
     """
 
     if value is None:
@@ -85,7 +85,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         return candidate
 
     # --------------------------------------------------
-    # 1. Thử định dạng đã có đủ dấu phân cách
+    # 1. Th? d?nh d?ng dă có d? d?u phân cách
     # --------------------------------------------------
 
     normal_match = re.search(
@@ -116,7 +116,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
             return normalized_date
 
     # --------------------------------------------------
-    # 2. Lấy tất cả chữ số từ chuỗi OCR
+    # 2. L?y t?t c? ch? s? t? chu?i OCR
     # --------------------------------------------------
 
     digits = "".join(
@@ -126,24 +126,24 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         )
     )
 
-    # Ngày đã đủ 8 chữ số.
+    # Ngày dă d? 8 ch? s?.
     if len(digits) == 8:
         return build_date(digits)
 
     # --------------------------------------------------
-    # 3. OCR thừa một chữ số, tổng cộng 9 chữ số
+    # 3. OCR th?a m?t ch? s?, t?ng c?ng 9 ch? s?
     # --------------------------------------------------
 
     if len(digits) == 9:
         candidate_digit_strings: list[str] = []
 
-        # Ưu tiên loại bỏ một chữ số trong cặp bị lặp.
+        # Uu tiên lo?i b? m?t ch? s? trong c?p b? l?p.
         #
-        # Ví dụ:
+        # Ví d?:
         # 240311995
         #     ^^
         #
-        # Bỏ một số 1:
+        # B? m?t s? 1:
         # 24031995
         for index in range(
             len(digits) - 1
@@ -154,8 +154,8 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
                     + digits[index + 1:]
                 )
 
-        # Nếu không phải lỗi lặp rõ ràng, thử loại bỏ
-        # từng chữ số và kiểm tra ngày hợp lệ.
+        # N?u không ph?i l?i l?p rơ ràng, th? lo?i b?
+        # t?ng ch? s? và ki?m tra ngày h?p l?.
         for index in range(len(digits)):
             candidate = (
                 digits[:index]
@@ -176,7 +176,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
                 return normalized_date
 
     # --------------------------------------------------
-    # 4. Tìm cụm 8 hoặc 9 chữ số trong chuỗi dài
+    # 4. T́m c?m 8 ho?c 9 ch? s? trong chu?i dài
     # --------------------------------------------------
 
     digit_sequences = re.findall(
@@ -229,5 +229,5 @@ file_path.write_text(
 )
 
 print(
-    "Đã sửa hàm normalize_date thành công."
+    "Đă s?a hàm normalize_date thành công."
 )

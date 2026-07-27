@@ -13,9 +13,6 @@ import numpy as np
 class PixelRegion:
     """
     Vùng cắt trên ảnh CCCD chuẩn hóa 1000 × 630 pixel.
-
-    x1, y1: góc trên bên trái.
-    x2, y2: góc dưới bên phải.
     """
 
     x1: int
@@ -26,95 +23,71 @@ class PixelRegion:
 
 class CCCDFieldCropper:
     """
-    Cắt các trường thông tin trên mặt trước CCCD Việt Nam.
+    Cắt các trường trên mặt trước CCCD Việt Nam.
 
-    Quy trình:
-    1. Đọc ảnh CCCD đã được perspective transform.
-    2. Chuẩn hóa chiều xoay.
-    3. Resize về kích thước cố định 1000 × 630.
-    4. Cắt từng trường bằng tọa độ pixel.
-    5. Tiền xử lý riêng từng vùng phục vụ OCR.
-    6. Lưu ảnh debug để kiểm tra.
+    Vùng cắt được hiệu chỉnh theo mẫu CCCD gắn chip có dòng:
+    - Quê quán nằm dưới giới tính/quốc tịch.
+    - Nơi thường trú nằm sát đáy thẻ.
+    - Có giá trị đến nằm dưới ảnh chân dung.
     """
 
     CANONICAL_WIDTH = 1000
     CANONICAL_HEIGHT = 630
 
-    # Tọa độ được tính trên ảnh chuẩn 1000 × 630.
-    #
-    # Các vùng bên dưới tập trung vào PHẦN GIÁ TRỊ,
-    # hạn chế lấy nhãn tiếng Việt và tiếng Anh.
     FIELD_REGIONS: dict[str, PixelRegion] = {
-        # Số CCCD: 001208031482
         "idNumber": PixelRegion(
-            x1=335,
-            y1=205,
-            x2=740,
-            y2=285,
-        ),
-
-        # Họ tên: NGUYEN TUAN MINH
-        "fullName": PixelRegion(
-            x1=285,
-            y1=270,
+            x1=390,
+            y1=255,
             x2=790,
-            y2=355,
+            y2=325,
         ),
-
-        # Ngày sinh: 16/04/2008
+        "fullName": PixelRegion(
+            x1=295,
+            y1=340,
+            x2=700,
+            y2=405,
+        ),
         "dateOfBirth": PixelRegion(
-            x1=575,
-            y1=330,
-            x2=850,
-            y2=410,
+            x1=580,
+            y1=390,
+            x2=830,
+            y2=440,
         ),
-
-        # Giới tính: Nam
         "gender": PixelRegion(
-            x1=285,
-            y1=375,
-            x2=505,
-            y2=445,
-        ),
-
-        # Quốc tịch: Viet Nam
-        "nationality": PixelRegion(
-            x1=570,
-            y1=375,
-            x2=900,
-            y2=445,
-        ),
-
-        # Quê quán
-        "placeOfOrigin": PixelRegion(
-            x1=275,
+            x1=455,
             y1=425,
-            x2=940,
-            y2=515,
+            x2=590,
+            y2=475,
         ),
-
-        # Nơi thường trú
+        "nationality": PixelRegion(
+            x1=790,
+            y1=425,
+            x2=995,
+            y2=475,
+        ),
+        "placeOfOrigin": PixelRegion(
+            x1=290,
+            y1=490,
+            x2=760,
+            y2=550,
+        ),
         "placeOfResidence": PixelRegion(
-            x1=270,
-            y1=495,
-            x2=960,
-            y2=600,
+            x1=290,
+            y1=535,
+            x2=995,
+            y2=630,
         ),
-
-        # Ngày hết hạn phía dưới ảnh chân dung
         "dateOfExpiry": PixelRegion(
             x1=15,
-            y1=490,
-            x2=285,
-            y2=590,
+            y1=545,
+            x2=300,
+            y2=615,
         ),
-
-        # Ảnh chân dung
         "portrait": PixelRegion(
             x1=20,
             y1=200,
             x2=270,
-            y2=505,
+            y2=520,
         ),
     }
 
@@ -123,17 +96,6 @@ class CCCDFieldCropper:
         image_path: str,
         output_dir: str,
     ) -> dict[str, dict[str, Any]]:
-        """
-        Đọc ảnh từ đường dẫn và cắt toàn bộ trường.
-
-        Args:
-            image_path:
-                Nên truyền ảnh *_card.jpg thay vì *_enhanced.jpg.
-
-            output_dir:
-                Thư mục lưu các vùng đã cắt.
-        """
-
         source_path = Path(image_path)
 
         if not source_path.exists():
@@ -163,10 +125,6 @@ class CCCDFieldCropper:
         output_dir: str,
         source_image_path: str | None = None,
     ) -> dict[str, dict[str, Any]]:
-        """
-        Chuẩn hóa ảnh và cắt các trường CCCD.
-        """
-
         if image is None or image.size == 0:
             raise ValueError(
                 "Ảnh CCCD đầu vào không hợp lệ"
@@ -174,7 +132,6 @@ class CCCDFieldCropper:
 
         output_path = Path(output_dir)
 
-        # Xóa kết quả cũ để tránh xem nhầm ảnh.
         if output_path.exists():
             shutil.rmtree(output_path)
 
@@ -184,7 +141,6 @@ class CCCDFieldCropper:
         )
 
         normalized_card = self.normalize_card_image(image)
-
         normalized_card_path = (
             output_path / "00_normalized_card.jpg"
         )
@@ -213,7 +169,6 @@ class CCCDFieldCropper:
                     f"Vùng cắt {field_name} bị rỗng: {region}"
                 )
 
-            # Lưu cả ảnh màu nguyên bản của vùng cắt.
             raw_field_path = (
                 output_path / f"{field_name}_raw.jpg"
             )
@@ -230,7 +185,6 @@ class CCCDFieldCropper:
                 field_name=field_name,
                 image=cropped_image,
             )
-
             processed_field_path = (
                 output_path / f"{field_name}.jpg"
             )
@@ -264,7 +218,6 @@ class CCCDFieldCropper:
             }
 
         debug_image = self.draw_regions(normalized_card)
-
         debug_output_path = (
             output_path / "fields_debug.jpg"
         )
@@ -296,14 +249,7 @@ class CCCDFieldCropper:
         self,
         image: np.ndarray,
     ) -> np.ndarray:
-        """
-        Chuẩn hóa ảnh thẻ về 1000 × 630.
-
-        Nếu ảnh đang nằm dọc thì tự xoay 90 độ.
-        """
-
         card = image.copy()
-
         height, width = card.shape[:2]
 
         if height > width:
@@ -312,7 +258,7 @@ class CCCDFieldCropper:
                 cv2.ROTATE_90_CLOCKWISE,
             )
 
-        card = cv2.resize(
+        return cv2.resize(
             card,
             (
                 self.CANONICAL_WIDTH,
@@ -321,27 +267,15 @@ class CCCDFieldCropper:
             interpolation=cv2.INTER_CUBIC,
         )
 
-        return card
-
     def preprocess_field(
         self,
         field_name: str,
         image: np.ndarray,
     ) -> np.ndarray:
-        """
-        Tiền xử lý từng vùng sau khi đã cắt.
-
-        Ảnh portrait giữ nguyên màu.
-        Các trường chữ được phóng lớn, chuyển xám,
-        tăng tương phản và làm nét nhẹ.
-        """
-
         if field_name == "portrait":
             return image.copy()
 
-        scale_factor = self.get_scale_factor(
-            field_name
-        )
+        scale_factor = self.get_scale_factor(field_name)
 
         enlarged = cv2.resize(
             image,
@@ -351,15 +285,15 @@ class CCCDFieldCropper:
             interpolation=cv2.INTER_CUBIC,
         )
 
-        if len(enlarged.shape) == 3:
-            gray = cv2.cvtColor(
+        gray = (
+            cv2.cvtColor(
                 enlarged,
                 cv2.COLOR_BGR2GRAY,
             )
-        else:
-            gray = enlarged
+            if len(enlarged.shape) == 3
+            else enlarged
+        )
 
-        # Khử nhiễu nhẹ, vẫn giữ nét chữ.
         denoised = cv2.bilateralFilter(
             gray,
             d=5,
@@ -367,22 +301,19 @@ class CCCDFieldCropper:
             sigmaSpace=35,
         )
 
-        # Tăng tương phản cục bộ.
         clahe = cv2.createCLAHE(
             clipLimit=1.8,
             tileGridSize=(8, 8),
         )
-
         enhanced = clahe.apply(denoised)
 
-        # Làm nét bằng unsharp mask.
         blurred = cv2.GaussianBlur(
             enhanced,
             (0, 0),
             sigmaX=0.8,
         )
 
-        sharpened = cv2.addWeighted(
+        return cv2.addWeighted(
             enhanced,
             1.6,
             blurred,
@@ -390,23 +321,17 @@ class CCCDFieldCropper:
             0,
         )
 
-        return sharpened
-
     @staticmethod
     def get_scale_factor(
         field_name: str,
     ) -> float:
-        """
-        Các trường nhỏ cần phóng lớn hơn.
-        """
-
         scale_factors = {
             "idNumber": 3.0,
             "fullName": 3.0,
             "dateOfBirth": 3.5,
             "gender": 3.5,
             "nationality": 3.0,
-            "placeOfOrigin": 2.7,
+            "placeOfOrigin": 3.0,
             "placeOfResidence": 2.7,
             "dateOfExpiry": 3.5,
         }
@@ -420,10 +345,6 @@ class CCCDFieldCropper:
         self,
         region: PixelRegion,
     ) -> None:
-        """
-        Kiểm tra vùng cắt có nằm trong ảnh chuẩn hay không.
-        """
-
         if not (
             0 <= region.x1 < region.x2
             <= self.CANONICAL_WIDTH
@@ -444,10 +365,6 @@ class CCCDFieldCropper:
         self,
         image: np.ndarray,
     ) -> np.ndarray:
-        """
-        Vẽ các vùng cắt lên ảnh CCCD chuẩn hóa.
-        """
-
         debug_image = image.copy()
 
         for field_name, region in self.FIELD_REGIONS.items():
@@ -459,10 +376,7 @@ class CCCDFieldCropper:
                 2,
             )
 
-            label_y = max(
-                region.y1 - 8,
-                20,
-            )
+            label_y = max(region.y1 - 8, 20)
 
             cv2.putText(
                 debug_image,

@@ -1,4 +1,4 @@
-﻿from app.modules.face_verification.sources.base import (
+from app.modules.face_verification.sources.base import (
     FaceImageSource,
     FaceImageSourceError,
 )

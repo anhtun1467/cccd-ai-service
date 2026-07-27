@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import cv2
 import numpy as np
@@ -12,10 +12,10 @@ from app.modules.face_verification.sources.base import (
 
 class OpenCVCameraSource(FaceImageSource):
     """
-    Nguồn ảnh sử dụng OpenCV.
+    Ngu?n ?nh s? d?ng OpenCV.
 
-    Class này có thể dùng cho Logitech C922 và các webcam
-    tương thích chuẩn camera của Windows.
+    Class này có th? dùng cho Logitech C922 và các webcam
+    tuong thích chu?n camera c?a Windows.
     """
 
     def __init__(self, config: CameraConfig):
@@ -25,7 +25,7 @@ class OpenCVCameraSource(FaceImageSource):
     @property
     def is_opened(self) -> bool:
         """
-        Kiểm tra camera hiện có đang mở hay không.
+        Ki?m tra camera hi?n có dang m? hay không.
         """
         return (
             self._camera is not None
@@ -34,7 +34,7 @@ class OpenCVCameraSource(FaceImageSource):
 
     def open(self) -> None:
         """
-        Mở camera và thiết lập độ phân giải.
+        M? camera và thi?t l?p d? phân gi?i.
         """
         if self.is_opened:
             return
@@ -48,7 +48,7 @@ class OpenCVCameraSource(FaceImageSource):
             self.close()
 
             raise FaceImageSourceError(
-                "Không thể mở camera với index "
+                "Không th? m? camera v?i index "
                 f"{self.config.device_index}."
             )
 
@@ -80,12 +80,12 @@ class OpenCVCameraSource(FaceImageSource):
 
     def _warm_up(self) -> None:
         """
-        Đọc bỏ một số frame đầu.
+        Đ?c b? m?t s? frame d?u.
 
-        Việc này giúp camera có thời gian:
-        - tự cân bằng sáng;
-        - tự lấy nét;
-        - ổn định hình ảnh.
+        Vi?c này giúp camera có th?i gian:
+        - t? cân b?ng sáng;
+        - t? l?y nét;
+        - ?n d?nh h́nh ?nh.
         """
         if self._camera is None:
             return
@@ -95,11 +95,11 @@ class OpenCVCameraSource(FaceImageSource):
 
     def capture_frame(self) -> np.ndarray:
         """
-        Chụp và trả về một frame BGR.
+        Ch?p và tr? v? m?t frame BGR.
         """
         if not self.is_opened:
             raise FaceImageSourceError(
-                "Camera chưa được mở."
+                "Camera chua du?c m?."
             )
 
         assert self._camera is not None
@@ -108,26 +108,26 @@ class OpenCVCameraSource(FaceImageSource):
 
         if not success or frame is None:
             raise FaceImageSourceError(
-                "Không đọc được frame từ camera."
+                "Không d?c du?c frame t? camera."
             )
 
         if frame.size == 0:
             raise FaceImageSourceError(
-                "Frame camera trả về bị rỗng."
+                "Frame camera tr? v? b? r?ng."
             )
 
         return frame
 
     def get_actual_resolution(self) -> tuple[int, int]:
         """
-        Trả về độ phân giải camera đang sử dụng.
+        Tr? v? d? phân gi?i camera dang s? d?ng.
 
         Returns:
             Tuple (width, height).
         """
         if not self.is_opened:
             raise FaceImageSourceError(
-                "Camera chưa được mở."
+                "Camera chua du?c m?."
             )
 
         assert self._camera is not None
@@ -144,11 +144,11 @@ class OpenCVCameraSource(FaceImageSource):
 
     def get_actual_fps(self) -> float:
         """
-        Trả về FPS camera đang được cấu hình.
+        Tr? v? FPS camera dang du?c c?u h́nh.
         """
         if not self.is_opened:
             raise FaceImageSourceError(
-                "Camera chưa được mở."
+                "Camera chua du?c m?."
             )
 
         assert self._camera is not None
@@ -159,7 +159,7 @@ class OpenCVCameraSource(FaceImageSource):
 
     def close(self) -> None:
         """
-        Giải phóng camera.
+        Gi?i phóng camera.
         """
         if self._camera is not None:
             self._camera.release()

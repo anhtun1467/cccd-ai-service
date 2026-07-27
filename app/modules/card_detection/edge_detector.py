@@ -13,4 +13,3 @@ class EdgeDetector:
 
     def detect(self, image: np.ndarray) -> np.ndarray:
         return cv2.Canny(image, self.threshold1, self.threshold2)
-    

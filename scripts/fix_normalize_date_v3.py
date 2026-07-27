@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 
 file_path = Path(
@@ -20,19 +20,19 @@ end_index = content.find(
 
 if start_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm normalize_date."
+        "Không t́m th?y hàm normalize_date."
     )
 
 if end_index == -1:
     raise RuntimeError(
-        "Không tìm thấy hàm is_valid_full_name."
+        "Không t́m th?y hàm is_valid_full_name."
     )
 
 new_function = r'''def normalize_date(value: str | None) -> str | None:
     """
-    Chuẩn hóa ngày tháng từ kết quả OCR.
+    Chu?n hóa ngày tháng t? k?t qu? OCR.
 
-    Hỗ trợ:
+    H? tr?:
         24/03/1995
         24-03-1995
         24.03.1995
@@ -40,8 +40,8 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         24/031995
         24/0311995
 
-    Hàm chỉ phân tích các cụm số, tránh đổi chữ trong
-    nhãn OCR như "Ngay sinh / Date of birth" thành số.
+    Hàm ch? phân tích các c?m s?, tránh d?i ch? trong
+    nhăn OCR nhu "Ngay sinh / Date of birth" thành s?.
     """
 
     if value is None:
@@ -83,7 +83,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
 
         return candidate
 
-    # 1. Ngày có đủ dấu phân cách: 24/03/1995
+    # 1. Ngày có d? d?u phân cách: 24/03/1995
     standard_patterns = (
         r"(?<!\d)"
         r"(\d{1,2})"
@@ -93,7 +93,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         r"(\d{4})"
         r"(?!\d)",
 
-        # Ngày tháng có thể dính: 2403/1995
+        # Ngày tháng có th? dính: 2403/1995
         r"(?<!\d)"
         r"(\d{2})"
         r"(\d{2})"
@@ -101,7 +101,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         r"(\d{4})"
         r"(?!\d)",
 
-        # Tháng năm có thể dính: 24/031995
+        # Tháng nam có th? dính: 24/031995
         r"(?<!\d)"
         r"(\d{2})"
         r"\s*[./\\-]\s*"
@@ -126,7 +126,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         if normalized_date:
             return normalized_date
 
-    # 2. Thu thập riêng các cụm số hoặc dấu ngày tháng.
+    # 2. Thu th?p riêng các c?m s? ho?c d?u ngày tháng.
     numeric_chunks = re.findall(
         r"(?<!\d)"
         r"\d[\d\s./\\-]{6,12}\d"
@@ -134,7 +134,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
         text,
     )
 
-    # Trường hợp đầu vào chỉ là một giá trị ngày.
+    # Tru?ng h?p d?u vào ch? là m?t giá tr? ngày.
     if not numeric_chunks:
         numeric_chunks = [text]
 
@@ -146,7 +146,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
             )
         )
 
-        # Chuỗi ngày đủ 8 số: 24031995.
+        # Chu?i ngày d? 8 s?: 24031995.
         if len(digits) == 8:
             normalized_date = build_date(
                 digits[0:2],
@@ -157,11 +157,11 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
             if normalized_date:
                 return normalized_date
 
-        # OCR thừa một chữ số: 240311995.
+        # OCR th?a m?t ch? s?: 240311995.
         if len(digits) == 9:
             candidates: list[str] = []
 
-            # Ưu tiên xóa một ký tự trong cặp lặp.
+            # Uu tiên xóa m?t kư t? trong c?p l?p.
             for index in range(
                 len(digits) - 1
             ):
@@ -171,7 +171,7 @@ new_function = r'''def normalize_date(value: str | None) -> str | None:
                         + digits[index + 1:]
                     )
 
-            # Phương án dự phòng: thử xóa từng chữ số.
+            # Phuong án d? pḥng: th? xóa t?ng ch? s?.
             for index in range(len(digits)):
                 candidate = (
                     digits[:index]
@@ -207,5 +207,5 @@ file_path.write_text(
 )
 
 print(
-    "Đã cập nhật normalize_date phiên bản 3."
+    "Đă c?p nh?t normalize_date phiên b?n 3."
 )
