@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
@@ -12,7 +12,7 @@ import numpy as np
 @dataclass(frozen=True)
 class PixelRegion:
     """
-    Vùng cắt trên ảnh CCCD chuẩn hóa 1000 × 630 pixel.
+    V├╣ng cß║»t tr├¬n ß║únh CCCD chuß║⌐n h├│a 1000 ├ù 630 pixel.
     """
 
     x1: int
@@ -23,12 +23,12 @@ class PixelRegion:
 
 class CCCDFieldCropper:
     """
-    Cắt các trường trên mặt trước CCCD Việt Nam.
+    Cß║»t c├íc tr╞░ß╗¥ng tr├¬n mß║╖t tr╞░ß╗¢c CCCD Viß╗çt Nam.
 
-    Vùng cắt được hiệu chỉnh theo mẫu CCCD gắn chip có dòng:
-    - Quê quán nằm dưới giới tính/quốc tịch.
-    - Nơi thường trú nằm sát đáy thẻ.
-    - Có giá trị đến nằm dưới ảnh chân dung.
+    V├╣ng cß║»t ─æ╞░ß╗úc hiß╗çu chß╗ënh theo mß║½u CCCD gß║»n chip c├│ d├▓ng:
+    - Qu├¬ qu├ín nß║▒m d╞░ß╗¢i giß╗¢i t├¡nh/quß╗æc tß╗ïch.
+    - N╞íi th╞░ß╗¥ng tr├║ nß║▒m s├ít ─æ├íy thß║╗.
+    - C├│ gi├í trß╗ï ─æß║┐n nß║▒m d╞░ß╗¢i ß║únh ch├ón dung.
     """
 
     CANONICAL_WIDTH = 1000
@@ -100,7 +100,7 @@ class CCCDFieldCropper:
 
         if not source_path.exists():
             raise FileNotFoundError(
-                f"Không tìm thấy ảnh CCCD: {source_path}"
+                f"Kh├┤ng t├¼m thß║Ñy ß║únh CCCD: {source_path}"
             )
 
         image = cv2.imread(
@@ -110,7 +110,7 @@ class CCCDFieldCropper:
 
         if image is None or image.size == 0:
             raise ValueError(
-                f"Không thể đọc ảnh CCCD: {source_path}"
+                f"Kh├┤ng thß╗â ─æß╗ìc ß║únh CCCD: {source_path}"
             )
 
         return self.crop_fields(
@@ -127,7 +127,7 @@ class CCCDFieldCropper:
     ) -> dict[str, dict[str, Any]]:
         if image is None or image.size == 0:
             raise ValueError(
-                "Ảnh CCCD đầu vào không hợp lệ"
+                "ß║ónh CCCD ─æß║ºu v├áo kh├┤ng hß╗úp lß╗ç"
             )
 
         output_path = Path(output_dir)
@@ -150,7 +150,7 @@ class CCCDFieldCropper:
             normalized_card,
         ):
             raise IOError(
-                f"Không thể lưu ảnh chuẩn hóa: "
+                f"Kh├┤ng thß╗â l╞░u ß║únh chuß║⌐n h├│a: "
                 f"{normalized_card_path}"
             )
 
@@ -166,7 +166,7 @@ class CCCDFieldCropper:
 
             if cropped_image.size == 0:
                 raise ValueError(
-                    f"Vùng cắt {field_name} bị rỗng: {region}"
+                    f"V├╣ng cß║»t {field_name} bß╗ï rß╗ùng: {region}"
                 )
 
             raw_field_path = (
@@ -178,7 +178,7 @@ class CCCDFieldCropper:
                 cropped_image,
             ):
                 raise IOError(
-                    f"Không thể lưu ảnh raw của {field_name}"
+                    f"Kh├┤ng thß╗â l╞░u ß║únh raw cß╗ºa {field_name}"
                 )
 
             processed_image = self.preprocess_field(
@@ -194,7 +194,7 @@ class CCCDFieldCropper:
                 processed_image,
             ):
                 raise IOError(
-                    f"Không thể lưu ảnh xử lý của {field_name}"
+                    f"Kh├┤ng thß╗â l╞░u ß║únh xß╗¡ l├╜ cß╗ºa {field_name}"
                 )
 
             results[field_name] = {
@@ -227,7 +227,7 @@ class CCCDFieldCropper:
             debug_image,
         ):
             raise IOError(
-                f"Không thể lưu ảnh debug: "
+                f"Kh├┤ng thß╗â l╞░u ß║únh debug: "
                 f"{debug_output_path}"
             )
 
@@ -350,7 +350,7 @@ class CCCDFieldCropper:
             <= self.CANONICAL_WIDTH
         ):
             raise ValueError(
-                f"Tọa độ X không hợp lệ: {region}"
+                f"Tß╗ìa ─æß╗Ö X kh├┤ng hß╗úp lß╗ç: {region}"
             )
 
         if not (
@@ -358,7 +358,7 @@ class CCCDFieldCropper:
             <= self.CANONICAL_HEIGHT
         ):
             raise ValueError(
-                f"Tọa độ Y không hợp lệ: {region}"
+                f"Tß╗ìa ─æß╗Ö Y kh├┤ng hß╗úp lß╗ç: {region}"
             )
 
     def draw_regions(

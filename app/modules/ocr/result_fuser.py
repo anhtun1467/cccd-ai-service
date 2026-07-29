@@ -33,7 +33,7 @@ STOP_LABEL_PATTERN = re.compile(
     r"quoc\s*tich|nationality|"
     r"que\s*quan|place\s*of\s*origin|"
     r"noi\s*thuong\s*tru|place\s*of\s*residence|"
-    r"co\s*gia\s*tr[iyj1l]\s*den|date\s*of\s*expiry"
+    r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den|date\s*of\s*expiry"
     r")\b",
     flags=re.IGNORECASE,
 )
@@ -161,12 +161,10 @@ def normalize_full_name(value: str | None) -> str | None:
     words = [
         word for word in text.split()
         if word not in INVALID_NAME_WORDS
+        and len(word) > 1
     ]
 
     if not 2 <= len(words) <= 7:
-        return None
-
-    if any(len(word) == 1 for word in words):
         return None
 
     return " ".join(words)
@@ -258,28 +256,28 @@ def _extract_before_label(
 
 def recover_full_name(raw_text: list[str] | None) -> str | None:
     lines = [str(line) for line in raw_text or [] if line]
-
     label_pattern = r"(?:ho\s*va\s*ten\s*/?\s*|full\s*name\s*:?)"
 
     for index, line in enumerate(lines):
         plain_line = remove_accents(line)
-
-        if not re.search(label_pattern, plain_line, flags=re.IGNORECASE):
+        match = re.search(label_pattern, plain_line, flags=re.IGNORECASE)
+        if not match:
             continue
 
-        suffix = _extract_after_label(plain_line, label_pattern)
-        candidate = normalize_full_name(suffix)
+        candidates = [
+            plain_line[:match.start()],
+            plain_line[match.end():],
+        ]
+        if index > 0:
+            candidates.append(remove_accents(lines[index - 1]))
+        candidates.extend(remove_accents(item) for item in lines[index + 1:index + 3])
 
-        if candidate:
-            return candidate
-
-        for next_line in lines[index + 1:index + 3]:
-            candidate = normalize_full_name(next_line)
+        for value in candidates:
+            candidate = normalize_full_name(value)
             if candidate:
                 return candidate
 
     return None
-
 
 def recover_gender(
     raw_text: list[str] | None,
@@ -395,28 +393,52 @@ def recover_labeled_date(
     raw_text: list[str] | None,
     field_name: str,
 ) -> str | None:
+    """
+    Phục hồi ngày từ đúng dòng chứa nhãn.
+
+    Hỗ trợ dòng có đồng thời nhãn tiếng Việt và tiếng Anh, ví dụ:
+        Ngay sinh / Date of birth: 24/0311995
+    """
+
     patterns = {
-        "dateOfBirth": r"(?:ngay\s*sinh\s*/?\s*|date\s*of\s*birth\s*:?)",
+        "dateOfBirth": (
+            r"(?:ngay\s*sinh|date\s*of\s*birth)"
+        ),
         "dateOfExpiry": (
-            r"(?:co\s*gia\s*tr[iyj1l]\s*den\s*:?"
-            r"|date\s*of\s*expiry\s*:?)"
+            r"(?:(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den"
+            r"|date\s*of\s*expiry)"
         ),
     }
 
-    label_pattern = patterns[field_name]
+    label_pattern = patterns.get(field_name)
+    if not label_pattern:
+        return None
 
     for line in raw_text or []:
         plain_line = remove_accents(str(line))
 
-        if not re.search(label_pattern, plain_line, flags=re.IGNORECASE):
+        matches = list(
+            re.finditer(
+                label_pattern,
+                plain_line,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        if not matches:
             continue
 
-        value = _extract_after_label(plain_line, label_pattern)
-        date = normalize_date(value)
+        # Ưu tiên phần sau nhãn cuối cùng trên dòng.
+        for match in reversed(matches):
+            value = plain_line[match.end():]
+            value = value.strip(" :;,/-")
 
-        if date:
-            return date
+            date = normalize_date(value)
+            if date:
+                return date
 
+        # Fallback cho các dạng:
+        # 24/0311995, 24031995, 24-03-1995, 24.03.1995.
         date = normalize_date(plain_line)
         if date:
             return date
@@ -429,10 +451,20 @@ def _clean_address_text(value: str | None) -> str | None:
         return None
 
     text = remove_accents(value)
+
+    # Loại cụm ngày hết hạn OCR sai nhẹ nhưng giữ phần địa chỉ phía sau.
+    text = re.sub(
+        r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den\s*"
+        r"\d{1,2}[./-]\d{1,2}[./-]\d{4}",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+
     text = re.sub(
         r"\b(?:que\s*quan|place\s*of\s*origin|"
         r"noi\s*thuong\s*tru|place\s*of\s*residence|"
-        r"co\s*gia\s*tr[iyj1l]\s*den|date\s*of\s*expiry)"
+        r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den|date\s*of\s*expiry)"
         r"\b\s*:?",
         " ",
         text,
@@ -456,77 +488,55 @@ def recover_address(
     raw_text: list[str] | None,
     field_name: str,
 ) -> str | None:
-    """Phục hồi địa chỉ từ nhãn và các dòng OCR kế tiếp.
-
-    Hàm lấy cả phần giá trị nằm cùng dòng với nhãn, ví dụ
-    ``Place of residence: Pho Voi``, rồi ghép thêm các dòng địa chỉ
-    phía dưới cho đến khi gặp nhãn trường tiếp theo.
-    """
-    lines = [
-        remove_accents(str(line))
-        for line in raw_text or []
-        if line
-    ]
+    lines = [remove_accents(str(line)) for line in raw_text or [] if line]
 
     if field_name == "placeOfOrigin":
         label_pattern = (
-            r"(?:que\s*quan\s*/?\s*"
-            r"(?:place\s*of\s*origin)?"
+            r"(?:que\s*quan\s*/?\s*(?:place\s*of\s*origin)?"
             r"|place\s*of\s*origin)\s*:?"
         )
-        stop_pattern = (
-            r"\b(?:noi\s*thuong\s*tru|place\s*of\s*residence|"
-            r"co\s*gia\s*tr[iyj1l]\s*den|date\s*of\s*expiry)\b"
-        )
+        stop_pattern = r"\b(?:noi\s*thuong\s*tru|place\s*of\s*residence|date\s*of\s*expiry)\b"
         max_pieces = 2
     else:
         label_pattern = (
-            r"(?:noi\s*thuong\s*tru\s*/?\s*"
-            r"(?:place\s*of\s*residence)?"
+            r"(?:noi\s*thuong\s*tru\s*/?\s*(?:place\s*of\s*residence)?"
             r"|place\s*of\s*residence)\s*:?"
         )
-        stop_pattern = (
-            r"\b(?:co\s*gia\s*tr[iyj1l]\s*den|"
-            r"date\s*of\s*expiry)\b"
-        )
+        stop_pattern = r"\b(?:date\s*of\s*expiry)\b"
         max_pieces = 3
 
     for index, line in enumerate(lines):
-        label_match = re.search(
-            label_pattern,
-            line,
-            flags=re.IGNORECASE,
-        )
+        label_match = re.search(label_pattern, line, flags=re.IGNORECASE)
         if not label_match:
             continue
 
         pieces: list[str] = []
+        before = line[:label_match.start()].strip(" :;,/-\"")
+        after = line[label_match.end():].strip(" :;,/-\"")
 
-        before = line[:label_match.start()].strip(" :;,/-")
-        after = line[label_match.end():].strip(" :;,/-")
+        def usable(piece: str) -> bool:
+            cleaned = _clean_address_text(piece)
+            if not cleaned:
+                return False
+            tokens = re.findall(r"[a-z0-9]+", _plain(cleaned))
+            return len(tokens) >= 2 and not all(len(token) == 1 for token in tokens)
 
-        if before and not STOP_LABEL_PATTERN.search(before):
+        if usable(before):
             pieces.append(before)
-
-        if after:
+        if usable(after):
             pieces.append(after)
 
         for next_line in lines[index + 1:index + 4]:
             if re.search(stop_pattern, next_line, flags=re.IGNORECASE):
                 break
-
             if STOP_LABEL_PATTERN.search(next_line):
                 break
-
-            cleaned_line = next_line.strip(" :;,/-")
-            if cleaned_line:
-                pieces.append(cleaned_line)
-
+            if usable(next_line):
+                pieces.append(next_line.strip(" :;,/-\""))
             if len(pieces) >= max_pieces:
                 break
 
         candidate = _clean_address_text(", ".join(pieces))
-
         if candidate and is_valid_address(candidate, field_name):
             return candidate
 
@@ -599,15 +609,33 @@ def select_full_name(
     full_card_value: str | None,
     raw_text: list[str] | None,
 ) -> tuple[str | None, str]:
-    raw_name = recover_full_name(raw_text)
-    if raw_name:
-        return raw_name, "RAW_TEXT_RECOVERY"
+    """
+    Chọn họ tên theo thứ tự ưu tiên:
 
-    full_name = normalize_full_name(full_card_value)
+    1. FULL_CARD_OCR nếu hợp lệ.
+    2. RAW_TEXT_RECOVERY nếu full-card không có hoặc không hợp lệ.
+    3. FIELD_OCR nếu hai nguồn trên không dùng được.
+
+    Thứ tự này giữ đúng provenance của dữ liệu:
+    khi full_card_data đã có họ tên hợp lệ thì không gắn nhãn
+    RAW_TEXT_RECOVERY chỉ vì raw_text cũng đọc ra cùng giá trị.
+    """
+
+    full_name = normalize_full_name(
+        full_card_value
+    )
     if full_name:
         return full_name, "FULL_CARD_OCR"
 
-    field_name = normalize_full_name(field_value)
+    raw_name = recover_full_name(
+        raw_text
+    )
+    if raw_name:
+        return raw_name, "RAW_TEXT_RECOVERY"
+
+    field_name = normalize_full_name(
+        field_value
+    )
     if field_name:
         return field_name, "FIELD_OCR"
 

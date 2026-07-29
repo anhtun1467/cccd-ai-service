@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -11,13 +11,13 @@ from app.modules.ocr.text_normalizer import OCRTextNormalizer
 
 class EasyOCREngine(BaseOCREngine):
     """
-    OCR Engine sử dụng EasyOCR.
+    OCR Engine sß╗¡ dß╗Ñng EasyOCR.
 
-    Quy trình:
-    1. Đọc văn bản từ ảnh.
-    2. Chuẩn hóa khoảng trắng và các nhãn CCCD.
-    3. Chuyển tọa độ bounding box sang kiểu JSON-safe.
-    4. Trả về OCRResult.
+    Quy tr├¼nh:
+    1. ─Éß╗ìc v─ân bß║ún tß╗½ ß║únh.
+    2. Chuß║⌐n h├│a khoß║úng trß║»ng v├á c├íc nh├ún CCCD.
+    3. Chuyß╗ân tß╗ìa ─æß╗Ö bounding box sang kiß╗âu JSON-safe.
+    4. Trß║ú vß╗ü OCRResult.
     """
 
     def __init__(
@@ -32,19 +32,19 @@ class EasyOCREngine(BaseOCREngine):
 
     def recognize(self, image_path: str) -> OCRResult:
         """
-        Nhận dạng văn bản trong ảnh.
+        Nhß║¡n dß║íng v─ân bß║ún trong ß║únh.
 
         Args:
-            image_path: Đường dẫn đến ảnh cần OCR.
+            image_path: ─É╞░ß╗¥ng dß║½n ─æß║┐n ß║únh cß║ºn OCR.
 
         Returns:
-            OCRResult chứa danh sách văn bản và các bounding box.
+            OCRResult chß╗⌐a danh s├ích v─ân bß║ún v├á c├íc bounding box.
         """
 
         if not image_path or not image_path.strip():
             return OCRResult(
                 success=False,
-                message="Đường dẫn ảnh không hợp lệ",
+                message="─É╞░ß╗¥ng dß║½n ß║únh kh├┤ng hß╗úp lß╗ç",
                 raw_text=[],
                 text_boxes=[],
             )
@@ -58,7 +58,7 @@ class EasyOCREngine(BaseOCREngine):
         except Exception as error:
             return OCRResult(
                 success=False,
-                message=f"EasyOCR thất bại: {error}",
+                message=f"EasyOCR thß║Ñt bß║íi: {error}",
                 raw_text=[],
                 text_boxes=[],
             )
@@ -95,14 +95,14 @@ class EasyOCREngine(BaseOCREngine):
         if not text_boxes:
             return OCRResult(
                 success=False,
-                message="Không phát hiện được văn bản trong ảnh",
+                message="Kh├┤ng ph├ít hiß╗çn ─æ╞░ß╗úc v─ân bß║ún trong ß║únh",
                 raw_text=[],
                 text_boxes=[],
             )
 
         return OCRResult(
             success=True,
-            message="OCR thành công",
+            message="OCR th├ánh c├┤ng",
             raw_text=raw_text,
             text_boxes=text_boxes,
         )
@@ -112,8 +112,8 @@ class EasyOCREngine(BaseOCREngine):
         box: Any,
     ) -> list[list[float]]:
         """
-        Chuyển tọa độ bounding box của EasyOCR sang danh sách float
-        để có thể serialize thành JSON.
+        Chuyß╗ân tß╗ìa ─æß╗Ö bounding box cß╗ºa EasyOCR sang danh s├ích float
+        ─æß╗â c├│ thß╗â serialize th├ánh JSON.
         """
 
         if box is None:

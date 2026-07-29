@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -8,11 +9,11 @@ import cv2
 
 from app.core.config import settings
 from app.modules.card_detection.detector import CardDetector
+from app.modules.card_detection.image_enhancer import cccd_image_enhancer
 from app.modules.ocr.field_ocr_service import field_ocr_service
 from app.modules.ocr.line_merger import OCRLineMerger
 from app.modules.ocr.result_fuser import fuse_ocr_data
 from app.modules.ocr.service import ocr_service
-from app.modules.ocr.text_normalizer import OCRTextNormalizer
 from app.modules.ocr.validator import CCCDValidator
 
 
@@ -29,6 +30,7 @@ class OcrPipelineService:
         -> OCR từng vùng
         -> Hợp nhất kết quả
         -> Validator
+        -> Lưu JSON
         -> JSON response
     """
 
@@ -50,8 +52,8 @@ class OcrPipelineService:
         self.validator = CCCDValidator()
 
         self.line_merger = OCRLineMerger(
-            vertical_tolerance_ratio=0.6,
-            maximum_horizontal_gap_ratio=3.5,
+            vertical_tolerance_ratio=0.35,
+            maximum_horizontal_gap_ratio=1.8,
         )
 
     def process_cccd_image(
@@ -63,7 +65,6 @@ class OcrPipelineService:
         """
 
         start_time = time.perf_counter()
-
         image_file = Path(image_path)
 
         if not image_file.exists():
@@ -73,6 +74,7 @@ class OcrPipelineService:
                     f"{image_file}"
                 ),
                 start_time=start_time,
+                image_file=image_file,
             )
 
         if not image_file.is_file():
@@ -82,20 +84,15 @@ class OcrPipelineService:
                     f"{image_file}"
                 ),
                 start_time=start_time,
+                image_file=image_file,
             )
 
         file_stem = image_file.stem
 
         output_dir = Path(settings.output_dir)
-        debug_dir = (
-            Path("storage")
-            / "debug"
-            / file_stem
-        )
-        field_output_dir = (
-            debug_dir
-            / "fields"
-        )
+        debug_dir = Path("storage") / "debug" / file_stem
+        json_output_dir = Path("storage") / "json"
+        field_output_dir = debug_dir / "fields"
 
         output_dir.mkdir(
             parents=True,
@@ -103,6 +100,11 @@ class OcrPipelineService:
         )
 
         debug_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        json_output_dir.mkdir(
             parents=True,
             exist_ok=True,
         )
@@ -121,12 +123,14 @@ class OcrPipelineService:
                     f"{error}"
                 ),
                 start_time=start_time,
+                image_file=image_file,
             )
 
         card_image = detection_result.get(
             "cardImage"
         )
-        enhanced_image = detection_result.get(
+
+        detector_enhanced_image = detection_result.get(
             "enhancedImage"
         )
 
@@ -137,15 +141,18 @@ class OcrPipelineService:
                     "trong ảnh"
                 ),
                 start_time=start_time,
+                image_file=image_file,
             )
 
-        if enhanced_image is None:
-            return self.build_error_response(
-                message=(
-                    "Không tạo được ảnh CCCD "
-                    "đã tăng cường"
-                ),
-                start_time=start_time,
+        blur_info = cccd_image_enhancer.estimate_blur(
+            card_image
+        )
+
+        if detector_enhanced_image is not None:
+            enhanced_image = detector_enhanced_image
+        else:
+            enhanced_image = cccd_image_enhancer.enhance(
+                card_image
             )
 
         card_output_path = (
@@ -175,19 +182,22 @@ class OcrPipelineService:
                     f"{card_output_path}"
                 ),
                 start_time=start_time,
+                image_file=image_file,
             )
 
         if not enhanced_saved:
             return self.build_error_response(
                 message=(
-                    "Không thể lưu ảnh CCCD "
-                    f"đã tăng cường: {enhanced_output_path}"
+                    "Không thể lưu ảnh CCCD đã tăng cường: "
+                    f"{enhanced_output_path}"
                 ),
                 start_time=start_time,
+                image_file=image_file,
             )
 
+        # OCR chính chạy trên ảnh warped gốc.
         full_ocr_result = self.run_full_card_ocr(
-            enhanced_image_path=enhanced_output_path,
+            image_path=card_output_path,
         )
 
         field_ocr_result = self.run_field_ocr(
@@ -314,7 +324,12 @@ class OcrPipelineService:
             )
         )
 
-        return {
+        json_output_path = (
+            json_output_dir
+            / f"{file_stem}.json"
+        )
+
+        response = {
             "status": "OCR_SUCCESS",
             "message": "OCR CCCD thành công",
             "cccdData": merged_data,
@@ -323,6 +338,9 @@ class OcrPipelineService:
                 "processingTime": processing_time,
                 "averageConfidence": (
                     average_confidence
+                ),
+                "imageQuality": self.make_json_safe(
+                    blur_info
                 ),
                 "fieldConfidences": (
                     field_confidences
@@ -338,6 +356,9 @@ class OcrPipelineService:
                     enhanced_output_path
                 ),
                 "debugDir": str(debug_dir),
+                "jsonOutput": str(
+                    json_output_path
+                ),
                 "fieldDebug": field_debug,
                 "resizeRatio": self.make_json_safe(
                     detection_result.get(
@@ -360,9 +381,16 @@ class OcrPipelineService:
             "fieldResults": field_results,
         }
 
+        self.save_json_response(
+            response=response,
+            json_path=json_output_path,
+        )
+
+        return response
+
     def run_full_card_ocr(
         self,
-        enhanced_image_path: Path,
+        image_path: Path,
     ) -> dict[str, Any]:
         """
         OCR toàn bộ ảnh CCCD.
@@ -371,7 +399,7 @@ class OcrPipelineService:
         try:
             result = (
                 self.ocr_service.extract_cccd_info(
-                    str(enhanced_image_path)
+                    str(image_path)
                 )
             )
 
@@ -430,6 +458,47 @@ class OcrPipelineService:
                     "OCR từng vùng thất bại: "
                     f"{error}"
                 )
+            )
+
+    def save_json_response(
+        self,
+        response: dict[str, Any],
+        json_path: Path,
+    ) -> None:
+        """
+        Lưu toàn bộ response OCR vào tệp JSON UTF-8.
+        """
+
+        try:
+            json_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            safe_response = self.make_json_safe(
+                response
+            )
+
+            with json_path.open(
+                mode="w",
+                encoding="utf-8",
+            ) as json_file:
+                json.dump(
+                    safe_response,
+                    json_file,
+                    ensure_ascii=False,
+                    indent=4,
+                )
+
+            print(
+                f"[INFO] Đã lưu JSON: "
+                f"{json_path}"
+            )
+
+        except Exception as error:
+            print(
+                "[WARNING] Không thể lưu JSON "
+                f"{json_path}: {error}"
             )
 
     def merge_structured_data(
@@ -719,9 +788,10 @@ class OcrPipelineService:
         self,
         message: str,
         start_time: float,
+        image_file: Path | None = None,
     ) -> dict[str, Any]:
         """
-        Tạo response khi pipeline thất bại.
+        Tạo response khi pipeline thất bại và cố gắng lưu JSON lỗi.
         """
 
         processing_time = round(
@@ -730,7 +800,7 @@ class OcrPipelineService:
             3,
         )
 
-        return {
+        response = {
             "status": "OCR_FAILED",
             "message": message,
             "cccdData": {
@@ -756,6 +826,31 @@ class OcrPipelineService:
             "mergedTextBoxes": [],
             "fieldResults": {},
         }
+
+        if image_file is not None:
+            json_output_dir = (
+                Path("storage")
+                / "json"
+            )
+
+            json_output_path = (
+                json_output_dir
+                / f"{image_file.stem}_error.json"
+            )
+
+            response["metadata"]["inputImage"] = (
+                str(image_file)
+            )
+            response["metadata"]["jsonOutput"] = (
+                str(json_output_path)
+            )
+
+            self.save_json_response(
+                response=response,
+                json_path=json_output_path,
+            )
+
+        return response
 
     def make_json_safe(
         self,

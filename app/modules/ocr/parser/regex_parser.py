@@ -183,31 +183,58 @@ class CCCDRegexParser:
         self,
         lines: list[str],
     ) -> str | None:
-        """
-        Trích xuất họ tên.
-        """
+        """Trích xuất họ tên ở trước hoặc sau nhãn họ tên."""
 
-        value = self.extract_label_value(
-            lines=lines,
-            label_pattern=self.NAME_LABEL_PATTERN,
-            allow_next_line=True,
-        )
+        for index, line in enumerate(lines):
+            match = self.NAME_LABEL_PATTERN.search(line)
+            if not match:
+                continue
 
+            candidates = [
+                line[:match.start()],
+                line[match.end():],
+            ]
+
+            if index > 0:
+                candidates.append(lines[index - 1])
+            if index + 1 < len(lines):
+                candidates.append(lines[index + 1])
+
+            for candidate in candidates:
+                value = self.clean_full_name(candidate)
+                if value:
+                    return value
+
+        return None
+
+    def clean_full_name(
+        self,
+        value: str | None,
+    ) -> str | None:
         if not value:
             return None
 
         value = self.remove_known_labels(value)
-        value = re.sub(
-            r"[^A-Za-zÀ-ỹ\s]",
-            " ",
-            value,
-        )
-        value = re.sub(r"\s+", " ", value).strip()
+        value = re.sub(r"[^A-Za-zÀ-ỹ\s]", " ", value)
+        words = [
+            word.upper()
+            for word in re.sub(r"\s+", " ", value).strip().split()
+            if len(word) > 1
+        ]
 
-        if not value:
+        forbidden = {
+            "HO", "VA", "TEN", "FULL", "NAME",
+            "NGAY", "SINH", "DATE", "BIRTH",
+            "GIOI", "TINH", "SEX", "QUOC",
+            "TICH", "NATIONALITY", "CITIZEN",
+            "IDENTITY", "CARD",
+        }
+        words = [word for word in words if word not in forbidden]
+
+        if not 2 <= len(words) <= 7:
             return None
 
-        return value.upper()
+        return " ".join(words)
 
     def parse_date_of_birth(
         self,
@@ -240,26 +267,37 @@ class CCCDRegexParser:
         self,
         lines: list[str],
     ) -> str | None:
-        """
-        Trích xuất giới tính.
-        """
+        """Trích xuất giới tính mà không nhầm chữ Nam trong Việt Nam."""
 
-        value = self.extract_label_value(
-            lines=lines,
-            label_pattern=self.GENDER_LABEL_PATTERN,
-            allow_next_line=True,
-        )
+        for index, line in enumerate(lines):
+            match = self.GENDER_LABEL_PATTERN.search(line)
+            if not match:
+                continue
 
-        if not value:
-            return None
+            section = line[match.end():]
+            section = self.NATIONALITY_LABEL_PATTERN.split(
+                section,
+                maxsplit=1,
+            )[0]
+            section = re.sub(
+                r"^\s*/?\s*sex\s*[:;/,-]?\s*",
+                "",
+                section,
+                flags=re.IGNORECASE,
+            )
 
-        normalized = value.lower()
+            candidates = [section]
+            if index + 1 < len(lines):
+                candidates.append(lines[index + 1])
 
-        if re.search(r"\b(nam|male)\b", normalized):
-            return "Nam"
+            for candidate in candidates:
+                plain = OCRTextNormalizer.normalize(candidate).lower()
+                tokens = re.findall(r"[a-zà-ỹ]+", plain)
 
-        if re.search(r"\b(nu|nữ|female)\b", normalized):
-            return "Nữ"
+                if any(token in {"nu", "nữ", "ni", "nv", "nw", "female"} for token in tokens):
+                    return "Nữ"
+                if any(token in {"nam", "male"} for token in tokens):
+                    return "Nam"
 
         return None
 
@@ -313,57 +351,56 @@ class CCCDRegexParser:
         lines: list[str],
         label_pattern: re.Pattern[str],
     ) -> str | None:
-        """
-        Trích xuất quê quán hoặc nơi thường trú.
-
-        Có thể ghép thêm một dòng tiếp theo nếu chưa gặp nhãn mới.
-        """
+        """Trích xuất địa chỉ, loại nhãn và vùng ngày hết hạn bị ghép nhầm."""
 
         for index, line in enumerate(lines):
-            if not label_pattern.search(line):
+            match = label_pattern.search(line)
+            if not match:
                 continue
 
-            first_value = self.remove_label(
-                line,
-                label_pattern,
-            )
-
             values: list[str] = []
+            before = line[:match.start()].strip(" :;,/-\"")
+            after = line[match.end():].strip(" :;,/-\"")
 
-            if first_value:
-                values.append(first_value)
+            # Chỉ dùng phần trước nhãn khi thực sự giống địa chỉ.
+            if self.looks_like_address(before):
+                values.append(before)
+            if self.looks_like_address(after):
+                values.append(after)
 
             next_index = index + 1
-
-            while next_index < len(lines):
+            while next_index < len(lines) and len(values) < 3:
                 next_line = lines[next_index].strip()
-
-                if not next_line:
-                    next_index += 1
-                    continue
-
-                if self.STOP_LABEL_PATTERN.search(next_line):
-                    break
-
-                if self.ID_PATTERN.search(
-                    next_line.replace(" ", "")
-                ):
-                    break
-
-                values.append(next_line)
-
-                # Địa chỉ trên CCCD thường chỉ kéo dài tối đa hai dòng.
-                if len(values) >= 2:
-                    break
-
                 next_index += 1
 
-            address = ", ".join(values)
-            address = self.clean_address(address)
+                if not next_line:
+                    continue
+                if self.STOP_LABEL_PATTERN.search(next_line):
+                    break
+                if self.ID_PATTERN.search(next_line.replace(" ", "")):
+                    break
+                if self.looks_like_address(next_line):
+                    values.append(next_line)
 
+            address = self.clean_address(", ".join(values))
             return address or None
 
         return None
+
+    @staticmethod
+    def looks_like_address(value: str | None) -> bool:
+        if not value:
+            return False
+
+        text = re.sub(
+            r"(?:co|c[o0])\s*[g9]ia\s*(?:tri|t[1il])\s*den\s*"
+            r"\d{1,2}[/-]\d{1,2}[/-]\d{4}",
+            " ",
+            value,
+            flags=re.IGNORECASE,
+        )
+        tokens = re.findall(r"[A-Za-zÀ-ỹ0-9]+", text)
+        return len(tokens) >= 2 and not all(len(token) == 1 for token in tokens)
 
     def extract_label_value(
         self,
@@ -469,6 +506,14 @@ class CCCDRegexParser:
         """
         Làm sạch chuỗi địa chỉ.
         """
+
+        value = re.sub(
+            r"(?:co|c[o0])\s*[g9]ia\s*(?:tri|t[1il])\s*den\s*"
+            r"\d{1,2}[/-]\d{1,2}[/-]\d{4}",
+            " ",
+            value,
+            flags=re.IGNORECASE,
+        )
 
         value = re.sub(
             r"\s+([,.;])",

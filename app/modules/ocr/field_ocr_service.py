@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from datetime import datetime
@@ -13,17 +13,17 @@ from app.modules.ocr.text_normalizer import OCRTextNormalizer
 
 class FieldOCRService:
     """
-    OCR từng vùng thông tin trên mặt trước CCCD.
+    OCR tß╗½ng v├╣ng th├┤ng tin tr├¬n mß║╖t tr╞░ß╗¢c CCCD.
 
-    Quy trình:
+    Quy tr├¼nh:
         Card image
-        -> Chuẩn hóa ảnh CCCD
-        -> Cắt từng trường
-        -> Phát hiện và cắt ảnh chân dung
-        -> OCR từng trường chữ
-        -> Chuẩn hóa văn bản
-        -> Làm sạch theo từng loại dữ liệu
-        -> Trả về structured data
+        -> Chuß║⌐n h├│a ß║únh CCCD
+        -> Cß║»t tß╗½ng tr╞░ß╗¥ng
+        -> Ph├ít hiß╗çn v├á cß║»t ß║únh ch├ón dung
+        -> OCR tß╗½ng tr╞░ß╗¥ng chß╗»
+        -> Chuß║⌐n h├│a v─ân bß║ún
+        -> L├ám sß║ích theo tß╗½ng loß║íi dß╗» liß╗çu
+        -> Trß║ú vß╗ü structured data
     """
 
     OCR_FIELDS: tuple[str, ...] = (
@@ -98,17 +98,17 @@ class FieldOCRService:
         output_dir: str,
     ) -> dict[str, Any]:
         """
-        Cắt ảnh CCCD và OCR từng trường riêng biệt.
+        Cß║»t ß║únh CCCD v├á OCR tß╗½ng tr╞░ß╗¥ng ri├¬ng biß╗çt.
 
         Args:
             card_image_path:
-                Đường dẫn ảnh CCCD đã được detect và perspective transform.
+                ─É╞░ß╗¥ng dß║½n ß║únh CCCD ─æ├ú ─æ╞░ß╗úc detect v├á perspective transform.
 
             output_dir:
-                Thư mục lưu ảnh field, ảnh portrait và ảnh debug.
+                Th╞░ mß╗Ñc l╞░u ß║únh field, ß║únh portrait v├á ß║únh debug.
 
         Returns:
-            Dictionary gồm:
+            Dictionary gß╗ôm:
             - structuredData
             - fieldResults
             - portrait
@@ -119,7 +119,7 @@ class FieldOCRService:
 
         if not card_path.exists():
             raise FileNotFoundError(
-                f"Không tìm thấy ảnh CCCD: {card_path}"
+                f"Kh├┤ng t├¼m thß║Ñy ß║únh CCCD: {card_path}"
             )
 
         field_results = self.cropper.crop_fields_from_path(
@@ -141,7 +141,7 @@ class FieldOCRService:
                 field_ocr_results[field_name] = (
                     self.build_empty_field_result(
                         field_name=field_name,
-                        message="Không tìm thấy vùng cắt",
+                        message="Kh├┤ng t├¼m thß║Ñy v├╣ng cß║»t",
                     )
                 )
                 continue
@@ -158,7 +158,7 @@ class FieldOCRService:
                 field_ocr_results[field_name] = (
                     self.build_empty_field_result(
                         field_name=field_name,
-                        message="Không có đường dẫn ảnh field",
+                        message="Kh├┤ng c├│ ─æ╞░ß╗¥ng dß║½n ß║únh field",
                         raw_image_path=raw_image_path,
                     )
                 )
@@ -173,7 +173,7 @@ class FieldOCRService:
                     self.build_empty_field_result(
                         field_name=field_name,
                         message=(
-                            "Không tìm thấy ảnh field: "
+                            "Kh├┤ng t├¼m thß║Ñy ß║únh field: "
                             f"{processed_path}"
                         ),
                         image_path=str(processed_path),
@@ -190,7 +190,7 @@ class FieldOCRService:
                 field_ocr_results[field_name] = (
                     self.build_empty_field_result(
                         field_name=field_name,
-                        message=f"OCR thất bại: {error}",
+                        message=f"OCR thß║Ñt bß║íi: {error}",
                         image_path=str(processed_path),
                         raw_image_path=raw_image_path,
                     )
@@ -263,10 +263,10 @@ class FieldOCRService:
         portrait_result: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
         """
-        Chuẩn hóa dữ liệu ảnh chân dung.
+        Chuß║⌐n h├│a dß╗» liß╗çu ß║únh ch├ón dung.
 
-        Ảnh portrait không được OCR. Ảnh này được dùng cho module
-        Face Verification ở bước tiếp theo.
+        ß║ónh portrait kh├┤ng ─æ╞░ß╗úc OCR. ß║ónh n├áy ─æ╞░ß╗úc d├╣ng cho module
+        Face Verification ß╗ƒ b╞░ß╗¢c tiß║┐p theo.
         """
 
         if not portrait_result:
@@ -321,10 +321,10 @@ class FieldOCRService:
         lines: list[str],
     ) -> str:
         """
-        Ghép các dòng OCR của một field.
+        Gh├⌐p c├íc d├▓ng OCR cß╗ºa mß╗Öt field.
 
-        Địa chỉ được ghép bằng dấu phẩy.
-        Các trường còn lại được ghép bằng khoảng trắng.
+        ─Éß╗ïa chß╗ë ─æ╞░ß╗úc gh├⌐p bß║▒ng dß║Ñu phß║⌐y.
+        C├íc tr╞░ß╗¥ng c├▓n lß║íi ─æ╞░ß╗úc gh├⌐p bß║▒ng khoß║úng trß║»ng.
         """
 
         clean_lines = [
@@ -350,7 +350,7 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Làm sạch giá trị OCR theo loại trường.
+        L├ám sß║ích gi├í trß╗ï OCR theo loß║íi tr╞░ß╗¥ng.
         """
 
         if not value:
@@ -398,7 +398,7 @@ class FieldOCRService:
         value: str,
     ) -> str:
         """
-        Xóa các nhãn tiếng Việt và tiếng Anh còn sót lại trong vùng OCR.
+        X├│a c├íc nh├ún tiß║┐ng Viß╗çt v├á tiß║┐ng Anh c├▓n s├│t lß║íi trong v├╣ng OCR.
         """
 
         patterns = self.FIELD_LABEL_PATTERNS.get(
@@ -435,9 +435,9 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Làm sạch số CCCD.
+        L├ám sß║ích sß╗æ CCCD.
 
-        Chỉ giữ chữ số và yêu cầu đúng 12 số.
+        Chß╗ë giß╗» chß╗» sß╗æ v├á y├¬u cß║ºu ─æ├║ng 12 sß╗æ.
         """
 
         substitutions = str.maketrans(
@@ -474,13 +474,13 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Làm sạch họ tên.
+        L├ám sß║ích hß╗ì t├¬n.
 
-        Giữ chữ cái tiếng Việt và khoảng trắng.
+        Giß╗» chß╗» c├íi tiß║┐ng Viß╗çt v├á khoß║úng trß║»ng.
         """
 
         cleaned = re.sub(
-            r"[^A-Za-zÀ-ỹ\s]",
+            r"[^A-Za-z├Ç-ß╗╣\s]",
             " ",
             value,
         )
@@ -506,7 +506,7 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Chuẩn hóa ngày về DD/MM/YYYY và kiểm tra ngày hợp lệ.
+        Chuß║⌐n h├│a ng├áy vß╗ü DD/MM/YYYY v├á kiß╗âm tra ng├áy hß╗úp lß╗ç.
         """
 
         normalized = value.translate(
@@ -567,7 +567,7 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Chuẩn hóa giới tính về Nam hoặc Nữ.
+        Chuß║⌐n h├│a giß╗¢i t├¡nh vß╗ü Nam hoß║╖c Nß╗».
         """
 
         lowered = value.lower()
@@ -579,10 +579,10 @@ class FieldOCRService:
             return "Nam"
 
         if re.search(
-            r"\b(nữ|nu|female)\b",
+            r"\b(nß╗»|nu|female)\b",
             lowered,
         ):
-            return "Nữ"
+            return "Nß╗»"
 
         return None
 
@@ -591,7 +591,7 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Chuẩn hóa quốc tịch.
+        Chuß║⌐n h├│a quß╗æc tß╗ïch.
         """
 
         lowered = value.lower()
@@ -609,7 +609,7 @@ class FieldOCRService:
                 return "Viet Nam"
 
         cleaned = re.sub(
-            r"[^A-Za-zÀ-ỹ\s]",
+            r"[^A-Za-z├Ç-ß╗╣\s]",
             " ",
             value,
         )
@@ -627,7 +627,7 @@ class FieldOCRService:
         value: str,
     ) -> str | None:
         """
-        Làm sạch quê quán hoặc nơi thường trú.
+        L├ám sß║ích qu├¬ qu├ín hoß║╖c n╞íi th╞░ß╗¥ng tr├║.
         """
 
         cleaned = value.replace(";", ",")
@@ -670,7 +670,7 @@ class FieldOCRService:
         text_boxes: list[Any],
     ) -> float:
         """
-        Tính confidence trung bình của kết quả OCR.
+        T├¡nh confidence trung b├¼nh cß╗ºa kß║┐t quß║ú OCR.
         """
 
         if not text_boxes:
@@ -718,7 +718,7 @@ class FieldOCRService:
         raw_image_path: str | None = None,
     ) -> dict[str, Any]:
         """
-        Tạo kết quả mặc định khi một field không OCR được.
+        Tß║ío kß║┐t quß║ú mß║╖c ─æß╗ïnh khi mß╗Öt field kh├┤ng OCR ─æ╞░ß╗úc.
         """
 
         return {
