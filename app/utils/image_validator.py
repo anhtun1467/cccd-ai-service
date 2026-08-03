@@ -1,36 +1,81 @@
+from __future__ import annotations
+
+from typing import Any
+
 import cv2
 import numpy as np
 
-def check_image_quality(img: np.ndarray, blur_threshold: float = 100.0, dark_threshold: float = 60.0):
-    """
-    Hàm kiểm tra chất lượng ảnh đầu vào (Task 9 - Reject Image)
-    Trả về dict chứa kết quả hợp lệ hay không và lý do từ chối.
-    """
-    # 1. Chuyển ảnh sang dạng xám (Grayscale) để dễ tính toán
-    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # 2. TÍNH ĐỘ MỜ (Blur) bằng phương sai Laplacian
-    # Lấy phương sai của đạo hàm bậc 2. Nếu < 100 thường là ảnh bị rung tay, nhòe.
-    blur_score = cv2.Laplacian(gray_img, cv2.CV_64F).var()
-    is_blurry = blur_score < blur_threshold
-    
-    # 3. TÍNH ĐỘ SÁNG (Brightness) bằng trung bình pixel
-    # Thang điểm từ 0 (Đen thui) đến 255 (Trắng toát). Nếu < 60 là quá tối.
-    brightness_score = np.mean(gray_img)
-    is_too_dark = brightness_score < dark_threshold
-    
-    # Xác định lý do nếu bị từ chối
-    reason = "Hợp lệ"
-    if is_blurry and is_too_dark:
-        reason = "Ảnh quá mờ và quá tối"
-    elif is_blurry:
-        reason = "Ảnh quá mờ (Blurry)"
-    elif is_too_dark:
-        reason = "Ảnh thiếu sáng (Too dark)"
 
-    return {
-        "is_valid": not (is_blurry or is_too_dark),
-        "blur_score": blur_score,
-        "brightness_score": brightness_score,
-        "reason": reason
-    }
+def check_image_quality(
+    image: np.ndarray,
+    blur_threshold: float = 100.0,
+    dark_threshold: float = 60.0,
+) -> dict[str, Any]:
+    """
+    Kiểm tra chất lượng ảnh trước khi đưa vào OCR.
+
+    Ảnh bị từ chối khi:
+    - Độ nét thấp hơn blur_threshold.
+    - Độ sáng thấp hơn dark_threshold.
+    """
+
+    if image is None or not isinstance(image, np.ndarray) or image.size == 0:
+        return {
+            "is_valid": False,
+            "blur_score": 0.0,
+            "brightness_score": 0.0,
+            "reason": "Không thể đọc được ảnh hoặc ảnh không có dữ liệu",
+        }
+
+    try:
+        # Hỗ trợ ảnh xám, BGR và BGRA
+        if image.ndim == 2:
+            gray_image = image
+        elif image.ndim == 3 and image.shape[2] == 3:
+            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        elif image.ndim == 3 and image.shape[2] == 4:
+            gray_image = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+        else:
+            return {
+                "is_valid": False,
+                "blur_score": 0.0,
+                "brightness_score": 0.0,
+                "reason": "Định dạng hoặc số kênh màu của ảnh không được hỗ trợ",
+            }
+
+        # Phương sai Laplacian càng thấp thì ảnh càng mờ
+        blur_score = float(
+            cv2.Laplacian(gray_image, cv2.CV_64F).var()
+        )
+
+        # Độ sáng trung bình trong khoảng 0–255
+        brightness_score = float(np.mean(gray_image))
+
+        is_blurry = blur_score < blur_threshold
+        is_too_dark = brightness_score < dark_threshold
+
+        reasons: list[str] = []
+
+        if is_blurry:
+            reasons.append("Ảnh quá mờ")
+
+        if is_too_dark:
+            reasons.append("Ảnh thiếu sáng")
+
+        is_valid = not reasons
+        reason = "Hợp lệ" if is_valid else " và ".join(reasons)
+
+        return {
+            "is_valid": is_valid,
+            "blur_score": round(blur_score, 2),
+            "brightness_score": round(brightness_score, 2),
+            "reason": reason,
+        }
+
+    except cv2.error:
+        return {
+            "is_valid": False,
+            "blur_score": 0.0,
+            "brightness_score": 0.0,
+            "reason": "OpenCV không thể kiểm tra chất lượng ảnh",
+        }

@@ -100,6 +100,48 @@ class OCRTextNormalizer:
         ),
     )
 
+    @staticmethod
+    def _remove_accents(value: str) -> str:
+        """Tạo bản không dấu để so khớp nhưng không sửa dữ liệu gốc."""
+        normalized = unicodedata.normalize("NFD", value)
+        plain = "".join(
+            character
+            for character in normalized
+            if unicodedata.category(character) != "Mn"
+        )
+        return plain.replace("đ", "d").replace("Đ", "D")
+
+    @classmethod
+    def _replace_phrase(
+        cls,
+        value: str,
+        pattern: str,
+        replacement: str,
+    ) -> str:
+        """
+        Chuẩn hóa nhãn không phân biệt dấu tiếng Việt.
+
+        Chỉ nhãn được thay thế; phần dữ liệu như họ tên và địa chỉ vẫn
+        giữ nguyên dấu mà OCR tiếng Việt đã nhận được.
+        """
+        plain_value = cls._remove_accents(value)
+        matches = list(
+            re.finditer(
+                pattern,
+                plain_value,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        for match in reversed(matches):
+            value = (
+                value[:match.start()]
+                + replacement
+                + value[match.end():]
+            )
+
+        return value
+
     @classmethod
     def normalize(
         cls,
@@ -184,11 +226,10 @@ class OCRTextNormalizer:
 
         # Sửa các cụm từ OCR bị dính hoặc nhận sai.
         for pattern, replacement in cls.PHRASE_REPLACEMENTS:
-            value = re.sub(
+            value = cls._replace_phrase(
+                value,
                 pattern,
                 replacement,
-                value,
-                flags=re.IGNORECASE,
             )
 
         # Chạy lại chuẩn hóa ngày tháng sau khi thay thế.

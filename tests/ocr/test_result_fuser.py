@@ -65,6 +65,28 @@ def test_origin_and_residence_from_raw_lines():
     assert sources["placeOfResidence"] == "RAW_TEXT_RECOVERY"
 
 
+def test_residence_continues_after_expiry_line():
+    result, sources = fuse_ocr_data(
+        full_card_data={
+            "placeOfResidence": "Place of residence TDP Dau Lang",
+            "dateOfExpiry": "12/09/2030",
+        },
+        field_data={},
+        raw_text=[
+            "Noi thuong tru Place of residence TDP Dau Lang",
+            "Cogia tri den 12/09/2030",
+            "Thi tran Thanh Lang, Binh Xuyen; Vinh Phuc",
+            "Date of Expiry",
+        ],
+    )
+
+    assert result["placeOfResidence"] == (
+        "TDP Dau Lang, Thi tran Thanh Lang, Binh Xuyen, Vinh Phuc"
+    )
+    assert result["dateOfExpiry"] == "12/09/2030"
+    assert sources["placeOfResidence"] == "RAW_TEXT_RECOVERY"
+
+
 def test_expiry_is_recovered_from_expiry_label_only():
     result, _ = fuse_ocr_data(
         full_card_data={"dateOfExpiry": None},
@@ -119,4 +141,3 @@ def test_recover_male_before_nationality():
     ]
 
     assert recover_gender(raw_text) == "Nam"
-

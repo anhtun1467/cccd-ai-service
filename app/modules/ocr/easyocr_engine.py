@@ -26,7 +26,7 @@ class EasyOCREngine(BaseOCREngine):
         gpu: bool = False,
     ) -> None:
         self.reader = easyocr.Reader(
-            languages or ["en"],
+            languages or ["vi", "en"],
             gpu=gpu,
         )
 

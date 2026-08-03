@@ -484,6 +484,18 @@ def _clean_address_text(value: str | None) -> str | None:
     return text or None
 
 
+def _is_expiry_line(value: str) -> bool:
+    """Nhận diện dòng hạn sử dụng có thể chen giữa hai dòng địa chỉ."""
+    return bool(
+        re.search(
+            r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den"
+            r"|date\s*of\s*expiry",
+            value,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def recover_address(
     raw_text: list[str] | None,
     field_name: str,
@@ -527,6 +539,16 @@ def recover_address(
             pieces.append(after)
 
         for next_line in lines[index + 1:index + 4]:
+            # EasyOCR sắp xếp theo tọa độ dọc. Trên CCCD, dòng
+            # "Có giá trị đến" ở bên trái có thể nằm giữa hai dòng
+            # nơi thường trú ở bên phải. Bỏ qua riêng dòng hạn sử dụng
+            # và tiếp tục tìm phần địa chỉ còn lại trong cửa sổ hiện tại.
+            if (
+                field_name == "placeOfResidence"
+                and _is_expiry_line(next_line)
+            ):
+                continue
+
             if re.search(stop_pattern, next_line, flags=re.IGNORECASE):
                 break
             if STOP_LABEL_PATTERN.search(next_line):

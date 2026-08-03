@@ -579,10 +579,10 @@ class FieldOCRService:
             return "Nam"
 
         if re.search(
-            r"\b(nß╗»|nu|female)\b",
+            r"\b(nß╗»|nữ|nu|female)\b",
             lowered,
         ):
-            return "Nß╗»"
+            return "Nữ"
 
         return None
 
