@@ -36,7 +36,13 @@ class OCRTextNormalizer:
         (r"\bque\s*quan\b", "Que quan"),
 
         (r"\bnoithuongtru\b", "Noi thuong tru"),
+        (
+            r"\bn[o0](?:i|[1l])?\s*thu[o0]ng\s*tr?u\b",
+            "Noi thuong tru",
+        ),
         (r"\bnoi\s*thuong\s*tru\b", "Noi thuong tru"),
+        # OCR thường đọc nhầm chữ "trụ" trong nhãn thành "tú/tu".
+        (r"\bnoi\s*thuong\s*tu\b", "Noi thuong tru"),
 
         (r"\bcancuoccongdan\b", "CAN CUOC CONG DAN"),
         (
@@ -54,6 +60,11 @@ class OCRTextNormalizer:
         (r"\bplaceoforigin\b", "Place of origin"),
         (r"\bplace\s*oforigin\b", "Place of origin"),
         (r"\bplaceof\s*origin\b", "Place of origin"),
+        # origin -> orgin/ongin và "of" -> "ol".
+        (
+            r"\bplace\s*o[fl]\s*o(?:ri|r|n|ni|i)?g(?:i)?n",
+            "Place of origin ",
+        ),
 
         (
             r"\bplaceofresidence\b",
@@ -66,6 +77,11 @@ class OCRTextNormalizer:
         (
             r"\bplaceof\s*residence\b",
             "Place of residence",
+        ),
+        # residence -> residonce; dấu nháy có thể bị chèn trước từ.
+        (
+            r"\bplace\s*o[fl]\s*['\"]?\s*resid[eaou]nce",
+            "Place of residence ",
         ),
 
         (r"\bdateofexpiry\b", "Date of Expiry"),
@@ -84,10 +100,10 @@ class OCRTextNormalizer:
         ),
 
         # Quốc tịch thường bị OCR sai
-        (r"\bvict\s*nana\b", "Viet Nam"),
-        (r"\bviet\s*nana\b", "Viet Nam"),
-        (r"\bvict\s*nam\b", "Viet Nam"),
-        (r"\bvietnam\b", "Viet Nam"),
+        (r"\bvict\s*nana\b", "Việt Nam"),
+        (r"\bviet\s*nana\b", "Việt Nam"),
+        (r"\bvict\s*nam\b", "Việt Nam"),
+        (r"\bvietnam\b", "Việt Nam"),
 
         # Cụm từ cố định
         (

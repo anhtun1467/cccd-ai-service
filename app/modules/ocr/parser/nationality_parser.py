@@ -11,6 +11,6 @@ class NationalityParser:
             or "VICT" in upper
             or "NANA" in upper
         ):
-            return "Viet Nam"
+            return "Việt Nam"
 
         return None

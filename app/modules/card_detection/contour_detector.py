@@ -83,12 +83,17 @@ class ContourDetector:
         if area < image_area * self.min_area_ratio:
             return False
 
-        x, y, w, h = cv2.boundingRect(contour)
+        (_, _), (rect_width, rect_height), _ = cv2.minAreaRect(contour)
 
-        if h == 0:
+        short_edge = min(rect_width, rect_height)
+        long_edge = max(rect_width, rect_height)
+
+        if short_edge <= 0:
             return False
 
-        aspect_ratio = w / float(h)
+        # minAreaRect giữ đúng tỷ lệ ngay cả khi thẻ xoay 90 độ hoặc
+        # chụp chéo; boundingRect cũ làm thẻ nghiêng bị sai tỷ lệ.
+        aspect_ratio = long_edge / float(short_edge)
 
         if not (self.min_aspect_ratio <= aspect_ratio <= self.max_aspect_ratio):
             return False
@@ -102,6 +107,85 @@ class ContourDetector:
             contour,
             self.epsilon_factor * perimeter,
             True,
+        )
+
+    def find_quadrilateral(
+        self,
+        contour: np.ndarray,
+    ) -> np.ndarray | None:
+        """Tìm bốn góc thật của thẻ bằng nhiều mức xấp xỉ."""
+        hull = cv2.convexHull(contour)
+        perimeter = cv2.arcLength(hull, True)
+
+        factors = (
+            self.epsilon_factor,
+            0.01,
+            0.015,
+            0.02,
+            0.025,
+            0.035,
+            0.04,
+            0.05,
+        )
+
+        for factor in dict.fromkeys(factors):
+            approx = cv2.approxPolyDP(
+                hull,
+                factor * perimeter,
+                True,
+            )
+            if len(approx) != 4 or not cv2.isContourConvex(approx):
+                continue
+
+            if cv2.contourArea(approx) < cv2.contourArea(contour) * 0.75:
+                continue
+
+            return approx.astype(np.float32)
+
+        return None
+
+    def expand_quadrilateral(
+        self,
+        points: np.ndarray,
+        image_shape: tuple[int, ...],
+    ) -> np.ndarray:
+        """Nới rất nhẹ bốn góc để không cắt dấu ở sát mép thẻ."""
+        quad = np.asarray(points, dtype=np.float32).reshape(4, 2)
+        center = quad.mean(axis=0)
+
+        side_lengths = [
+            np.linalg.norm(quad[(index + 1) % 4] - quad[index])
+            for index in range(4)
+        ]
+        short_edge = max(min(side_lengths), 1.0)
+
+        # Padding 55 px trước đây đưa cả nền vào ảnh và làm mất hiệu lực
+        # của perspective transform. Chỉ nới tối đa 1,5% cạnh ngắn.
+        effective_padding = min(float(self.padding), short_edge * 0.015)
+        scale = 1.0 + (2.0 * effective_padding / short_edge)
+        expanded = center + (quad - center) * scale
+
+        image_height, image_width = image_shape[:2]
+        expanded[:, 0] = np.clip(expanded[:, 0], 0, image_width - 1)
+        expanded[:, 1] = np.clip(expanded[:, 1], 0, image_height - 1)
+
+        return expanded.reshape(4, 1, 2).astype(np.float32)
+
+    def contour_to_quadrilateral(
+        self,
+        contour: np.ndarray,
+        image_shape: tuple[int, ...],
+    ) -> np.ndarray:
+        """Trả bốn góc phối cảnh; fallback là rotated rectangle."""
+        quadrilateral = self.find_quadrilateral(contour)
+
+        if quadrilateral is None:
+            rotated_rect = cv2.minAreaRect(contour)
+            quadrilateral = cv2.boxPoints(rotated_rect).reshape(4, 1, 2)
+
+        return self.expand_quadrilateral(
+            quadrilateral,
+            image_shape,
         )
 
     def add_padding_to_box(
@@ -140,31 +224,15 @@ class ContourDetector:
             if not self.is_valid_card_contour(contour, resized_image.shape):
                 continue
 
-            approx = self.approximate_contour(contour)
-
-            x, y, w, h = cv2.boundingRect(contour)
-
-            # Nếu approx ra 4 điểm, vẫn dùng bounding box có padding
-            # để tránh bị cắt mất mép CCCD.
-            if len(approx) == 4:
-                padded_box = self.add_padding_to_box(
-                    x=x,
-                    y=y,
-                    w=w,
-                    h=h,
-                    image_shape=resized_image.shape,
-                )
-                return padded_box, mask, contours
-
-            # Nếu không đủ 4 điểm, dùng bounding rectangle có padding.
-            fallback = self.add_padding_to_box(
-                x=x,
-                y=y,
-                w=w,
-                h=h,
-                image_shape=resized_image.shape,
+            # Dùng bốn góc thật để làm phẳng phối cảnh. Đây là điểm khác
+            # biệt quan trọng so với bounding box ngang của bản cũ.
+            return (
+                self.contour_to_quadrilateral(
+                    contour,
+                    resized_image.shape,
+                ),
+                mask,
+                contours,
             )
-
-            return fallback, mask, contours
 
         return None, mask, contours

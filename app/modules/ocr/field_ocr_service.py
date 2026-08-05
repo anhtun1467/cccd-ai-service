@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -479,17 +480,13 @@ class FieldOCRService:
         Giß╗» chß╗» c├íi tiß║┐ng Viß╗çt v├á khoß║úng trß║»ng.
         """
 
-        cleaned = re.sub(
-            r"[^A-Za-z├Ç-ß╗╣\s]",
-            " ",
-            value,
+        normalized = unicodedata.normalize("NFC", str(value))
+        words = re.findall(
+            r"[^\W\d_]+",
+            normalized,
+            flags=re.UNICODE,
         )
-
-        cleaned = re.sub(
-            r"\s+",
-            " ",
-            cleaned,
-        ).strip()
+        cleaned = " ".join(words).strip()
 
         if len(cleaned) < 3:
             return None
@@ -570,18 +567,19 @@ class FieldOCRService:
         Chuß║⌐n h├│a giß╗¢i t├¡nh vß╗ü Nam hoß║╖c Nß╗».
         """
 
-        lowered = value.lower()
+        normalized = unicodedata.normalize("NFD", str(value))
+        plain = "".join(
+            character
+            for character in normalized
+            if unicodedata.category(character) != "Mn"
+        )
+        plain = plain.replace("đ", "d").replace("Đ", "D")
+        compact = re.sub(r"[^a-z]", "", plain.lower())
 
-        if re.search(
-            r"\b(nam|male)\b",
-            lowered,
-        ):
+        if compact in {"nam", "male"}:
             return "Nam"
 
-        if re.search(
-            r"\b(nß╗»|nữ|nu|female)\b",
-            lowered,
-        ):
+        if compact in {"nu", "female", "ni", "nw", "nv", "nii"}:
             return "Nữ"
 
         return None
@@ -594,7 +592,13 @@ class FieldOCRService:
         Chuß║⌐n h├│a quß╗æc tß╗ïch.
         """
 
-        lowered = value.lower()
+        normalized = unicodedata.normalize("NFD", str(value))
+        plain = "".join(
+            character
+            for character in normalized
+            if unicodedata.category(character) != "Mn"
+        )
+        lowered = plain.replace("đ", "d").replace("Đ", "D").lower()
 
         vietnam_patterns = (
             r"\bviet\s*nam\b",
@@ -606,18 +610,14 @@ class FieldOCRService:
 
         for pattern in vietnam_patterns:
             if re.search(pattern, lowered):
-                return "Viet Nam"
+                return "Việt Nam"
 
-        cleaned = re.sub(
-            r"[^A-Za-z├Ç-ß╗╣\s]",
-            " ",
-            value,
-        )
-
-        cleaned = re.sub(
-            r"\s+",
-            " ",
-            cleaned,
+        cleaned = " ".join(
+            re.findall(
+                r"[^\W\d_]+",
+                unicodedata.normalize("NFC", str(value)),
+                flags=re.UNICODE,
+            )
         ).strip()
 
         return cleaned or None

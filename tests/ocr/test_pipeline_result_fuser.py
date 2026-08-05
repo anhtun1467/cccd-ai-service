@@ -62,7 +62,7 @@ def test_pipeline_fusion_data() -> None:
     )
 
     assert result["nationality"] == (
-        "Viet Nam"
+        "Việt Nam"
     )
 
     assert sources["fullName"] == (

@@ -322,7 +322,7 @@ class CCCDRegexParser:
                 r"\b(viet\s*nam|vict\s*nam|vict\s*nana)\b",
                 normalized,
             ):
-                return "Viet Nam"
+                return "Việt Nam"
 
             value = self.remove_known_labels(value)
             value = re.sub(
@@ -342,7 +342,7 @@ class CCCDRegexParser:
                 line,
                 re.IGNORECASE,
             ):
-                return "Viet Nam"
+                return "Việt Nam"
 
         return None
 

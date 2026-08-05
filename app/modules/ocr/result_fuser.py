@@ -4,6 +4,7 @@ import re
 import unicodedata
 from copy import deepcopy
 from datetime import datetime
+from difflib import SequenceMatcher
 from typing import Any
 
 
@@ -19,24 +20,119 @@ FIELD_NAMES = (
 )
 
 INVALID_NAME_WORDS = {
-    "HO", "VA", "TEN", "FULL", "NAME", "NO", "SO",
+    "VA", "TEN", "FULL", "NAME", "NO", "SO",
     "IDENTITY", "CARD", "CITIZEN", "NGAY", "SINH",
     "DATE", "OF", "BIRTH", "GIOI", "TINH", "SEX",
     "QUOC", "TICH", "NATIONALITY",
 }
 
+ORIGIN_EN_LABEL_PATTERN = (
+    r"place\s*o[fl]\s*o(?:ri|r|n|ni|i)?g(?:i)?n"
+)
+RESIDENCE_EN_LABEL_PATTERN = (
+    r"place\s*o[fl]\s*['\"]?\s*resid[eaou]nce"
+)
+RESIDENCE_VI_LABEL_PATTERN = (
+    r"n[o0](?:i|[1l])?\s*thu[o0]ng\s*tr?u"
+)
+EXPIRY_LABEL_PATTERN = (
+    r"(?:co|c[o0])\s*[i1l]?\s*[g9]ia(?:\s+[a-z])?\s*[\(\[]?\s*"
+    r"(?:tr[iyj1l]|t[1il])\s*den|date\s*of\s*expiry"
+)
+
 STOP_LABEL_PATTERN = re.compile(
-    r"\b("
+    rf"\b("
     r"ho\s*va\s*ten|full\s*name|"
     r"ngay\s*sinh|date\s*of\s*birth|"
     r"gioi\s*tinh|sex|"
     r"quoc\s*tich|nationality|"
-    r"que\s*quan|place\s*of\s*origin|"
-    r"noi\s*thuong\s*tru|place\s*of\s*residence|"
-    r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den|date\s*of\s*expiry"
-    r")\b",
+    rf"que\s*quan|{ORIGIN_EN_LABEL_PATTERN}|"
+    rf"{RESIDENCE_VI_LABEL_PATTERN}|{RESIDENCE_EN_LABEL_PATTERN}|"
+    rf"{EXPIRY_LABEL_PATTERN}"
+    r")",
     flags=re.IGNORECASE,
 )
+
+
+KNOWN_ADMINISTRATIVE_PHRASES: tuple[tuple[str, str], ...] = (
+    # So khớp bằng bản không dấu để sửa dấu thanh OCR đọc thiếu/sai.
+    # Cụm dài phải đứng trước cụm ngắn để tránh thay từng phần.
+    (r"\bthua\s+thien\s+hue\b", "Thừa Thiên Huế"),
+    (r"\bthanh\s+pho\s+thanh\s+hoa\b", "Thành phố Thanh Hóa"),
+    (r"\bthi\s+tran\s+voi\b", "Thị trấn Vôi"),
+    (r"\bphu\s+van\s+nam\b", "Phú Vân Nam"),
+    (r"\bbach\s+thuan\b", "Bách Thuận"),
+    (r"\bvu\s+thu\b", "Vũ Thư"),
+    (r"\bthai\s+binh\b", "Thái Bình"),
+    (r"\bhai\s+chau\b", "Hải Châu"),
+    (r"\bhai\s+hau\b", "Hải Hậu"),
+    (r"\bnam\s+dinh\b", "Nam Định"),
+    (r"\bdong\s+son\b", "Đông Sơn"),
+    (r"\bnguyen\s+hong\b", "Nguyên Hồng"),
+    (r"\btan\s+son\b", "Tân Sơn"),
+    (r"\bthanh\s+hoa\b", "Thanh Hóa"),
+    (r"\bea\s+hiao\b", "Ea Hiao"),
+    (r"\bea\s+h\s*['’]?\s*leo\b", "Ea H'Leo"),
+    (r"\bdak\s+lak\b", "Đắk Lắk"),
+    (r"\ble\s+loi\b", "Lê Lợi"),
+    (r"\bpho\s+voi\b", "Phố Vôi"),
+    (r"\blang\s+giang\b", "Lạng Giang"),
+    (r"\bbac\s+giang\b", "Bắc Giang"),
+    (r"\bvinh\s+ha\b", "Vinh Hà"),
+    (r"\bphu\s+vang\b", "Phú Vang"),
+    (r"\bphu\s+tuyen\b", "Phú Tuyên"),
+    (r"\bbinh\s+thanh\b", "Bình Thành"),
+    (r"\bhuong\s+tra\b", "Hương Trà"),
+    (r"\bthanh\s+pho\b", "Thành phố"),
+    (r"\bthi\s+tran\b", "Thị trấn"),
+)
+
+
+CANONICAL_DISPUTED_SURNAMES = {
+    # Chỉ áp dụng khi ít nhất hai nguồn OCR cùng đọc được họ "HO"
+    # nhưng cho dấu khác nhau (ví dụ HỔ và HÔ). Trường hợp chỉ có một
+    # nguồn sẽ được giữ nguyên để không tự đoán tên người dùng.
+    "HO": "HỒ",
+}
+
+
+# Chỉ áp dụng cho từ đầu tiên của họ tên khi đã xác định được giới tính.
+# Đây là các họ phổ biến, không dùng như một từ điển đoán mọi âm tiết.
+COMMON_VIETNAMESE_SURNAMES = {
+    "NGUYEN": "NGUYỄN",
+    "TRAN": "TRẦN",
+    "LE": "LÊ",
+    "PHAM": "PHẠM",
+    "HOANG": "HOÀNG",
+    "HUYNH": "HUỲNH",
+    "PHAN": "PHAN",
+    "VU": "VŨ",
+    "VO": "VÕ",
+    "DANG": "ĐẶNG",
+    "BUI": "BÙI",
+    "DO": "ĐỖ",
+    "HO": "HỒ",
+    "NGO": "NGÔ",
+    "DUONG": "DƯƠNG",
+    "LY": "LÝ",
+    "TRUONG": "TRƯƠNG",
+    "DINH": "ĐINH",
+    "TRINH": "TRỊNH",
+    "DAO": "ĐÀO",
+    "LUU": "LƯU",
+    "TA": "TẠ",
+}
+
+FEMALE_NAME_DIACRITICS = {
+    "THI": "THỊ",
+    "MAY": "MÂY",
+    "HUYEN": "HUYỀN",
+}
+
+MALE_NAME_DIACRITICS = {
+    "VAN": "VĂN",
+    "TUNG": "TÙNG",
+}
 
 
 def remove_accents(value: str) -> str:
@@ -143,7 +239,9 @@ def _plain(value: str | None) -> str:
 
 
 def _truncate_at_next_label(value: str) -> str:
-    match = STOP_LABEL_PATTERN.search(value)
+    # remove_accents() giữ nguyên số lượng ký tự, vì vậy có thể dùng vị
+    # trí match trên bản không dấu để cắt chuỗi gốc mà không làm mất dấu.
+    match = STOP_LABEL_PATTERN.search(remove_accents(value))
     if not match:
         return value
     return value[:match.start()]
@@ -153,16 +251,22 @@ def normalize_full_name(value: str | None) -> str | None:
     if not value:
         return None
 
-    text = remove_accents(value).upper()
-    text = _truncate_at_next_label(text)
-    text = re.sub(r"[^A-Z\s]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    text = _truncate_at_next_label(str(value))
+    raw_words = re.findall(
+        r"[^\W\d_]+",
+        text,
+        flags=re.UNICODE,
+    )
+    words = []
 
-    words = [
-        word for word in text.split()
-        if word not in INVALID_NAME_WORDS
-        and len(word) > 1
-    ]
+    for word in raw_words:
+        plain_word = remove_accents(word).upper()
+        if (
+            plain_word in INVALID_NAME_WORDS
+            or len(plain_word) <= 1
+        ):
+            continue
+        words.append(word.upper())
 
     if not 2 <= len(words) <= 7:
         return None
@@ -176,7 +280,7 @@ def normalize_nationality(value: str | None) -> str | None:
 
     compact = re.sub(r"[^a-z]", "", _plain(value))
     if "vietnam" in compact or "vietnan" in compact:
-        return "Viet Nam"
+        return "Việt Nam"
     return None
 
 
@@ -186,7 +290,7 @@ def normalize_gender(value: str | None) -> str | None:
 
     Quy ước:
         Nam -> Nam
-        Nữ  -> Nu
+        Nữ  -> Nữ
 
     Chấp nhận các lỗi OCR thường gặp:
         Nu, Nữ, Ni, Nw, Nv, Nii -> Nu
@@ -197,7 +301,17 @@ def normalize_gender(value: str | None) -> str | None:
     if not value:
         return None
 
-    text = remove_accents(str(value))
+    text_value = str(value)
+
+    # Một số file nguồn cũ đã giải mã UTF-8 bằng code page 437,
+    # khiến "Nữ" trở thành "Nß╗»". Khôi phục chuỗi trước khi
+    # chuẩn hóa để vẫn dùng được dữ liệu FIELD_OCR đã đọc đúng.
+    try:
+        repaired_value = text_value.encode("cp437").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        repaired_value = text_value
+
+    text = remove_accents(repaired_value)
     text = text.lower().strip()
 
     # Chỉ giữ chữ cái
@@ -217,7 +331,7 @@ def normalize_gender(value: str | None) -> str | None:
         "nii",
         "nuu",
     }:
-        return "Nu"
+        return "Nữ"
 
     # ====== NAM ======
     # Chỉ chấp nhận đúng "nam", không dùng substring.
@@ -265,12 +379,12 @@ def recover_full_name(raw_text: list[str] | None) -> str | None:
             continue
 
         candidates = [
-            plain_line[:match.start()],
-            plain_line[match.end():],
+            line[:match.start()],
+            line[match.end():],
         ]
         if index > 0:
-            candidates.append(remove_accents(lines[index - 1]))
-        candidates.extend(remove_accents(item) for item in lines[index + 1:index + 3])
+            candidates.append(lines[index - 1])
+        candidates.extend(lines[index + 1:index + 3])
 
         for value in candidates:
             candidate = normalize_full_name(value)
@@ -278,6 +392,41 @@ def recover_full_name(raw_text: list[str] | None) -> str | None:
                 return candidate
 
     return None
+
+
+def _reconcile_disputed_surname(
+    selected_name: str,
+    alternatives: list[str | None],
+) -> str:
+    """
+    Chuẩn hóa họ chỉ khi nhiều nguồn cùng chữ gốc nhưng bất đồng dấu.
+
+    Nhờ điều kiện bất đồng này, một kết quả đơn lẻ như ``HỔ`` sẽ không
+    bị tự ý sửa. Với trường hợp raw OCR đọc ``HỔ`` và field OCR đọc
+    ``HÔ``, họ phổ biến tương ứng được chuẩn hóa thành ``HỒ``.
+    """
+    selected_words = selected_name.split()
+    if not selected_words:
+        return selected_name
+
+    surname_key = remove_accents(selected_words[0]).upper()
+    canonical = CANONICAL_DISPUTED_SURNAMES.get(surname_key)
+    if not canonical:
+        return selected_name
+
+    variants = {
+        candidate.split()[0].upper()
+        for candidate in alternatives
+        if candidate
+        and candidate.split()
+        and remove_accents(candidate.split()[0]).upper()
+        == surname_key
+    }
+    if len(variants) < 2:
+        return selected_name
+
+    selected_words[0] = canonical
+    return " ".join(selected_words)
 
 def recover_gender(
     raw_text: list[str] | None,
@@ -389,6 +538,86 @@ def recover_nationality(raw_text: list[str] | None) -> str | None:
     return None
 
 
+def _expiry_label_candidate(value: str) -> str:
+    """Lấy phần có khả năng là nhãn hạn sử dụng, bỏ ngày và dữ liệu sau ngày."""
+    original = str(value)
+    normalized_digits = normalize_ocr_digits(original)
+    date_match = re.search(
+        r"(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{4}(?!\d)",
+        normalized_digits,
+    )
+    if date_match:
+        original = original[:date_match.start()]
+
+    plain = remove_accents(original).lower()
+    plain = re.sub(r"[^a-z]+", " ", plain)
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+def _looks_like_expiry_label(value: str) -> bool:
+    """
+    Nhận diện nhãn hạn sử dụng bị OCR sai nặng.
+
+    Ví dụ thực tế:
+        Duto of erpiry
+        Dalo ar expiry
+        Co gia ưn đen
+        Co Igia E (triden
+
+    Việc so khớp theo từng thành phần tránh nhầm ``Date of birth`` thành
+    ``Date of expiry``.
+    """
+    plain_value = remove_accents(str(value))
+    if re.search(
+        EXPIRY_LABEL_PATTERN,
+        plain_value,
+        flags=re.IGNORECASE,
+    ):
+        return True
+
+    candidate = _expiry_label_candidate(value)
+    if not candidate:
+        return False
+
+    tokens = candidate.split()
+    if len(tokens) >= 2:
+        first_is_date = (
+            SequenceMatcher(None, tokens[0], "date").ratio()
+            >= 0.50
+        )
+        has_expiry = any(
+            SequenceMatcher(None, token, "expiry").ratio()
+            >= 0.55
+            or token.endswith("piry")
+            for token in tokens[1:]
+        )
+        if first_is_date and has_expiry:
+            return True
+
+    compact = "".join(tokens)
+    has_gia = any(
+        SequenceMatcher(None, token, "gia").ratio() >= 0.65
+        or SequenceMatcher(None, token, "cogia").ratio() >= 0.70
+        for token in tokens
+    )
+    last_token = tokens[-1] if tokens else ""
+    has_den = bool(
+        SequenceMatcher(None, last_token, "den").ratio() >= 0.62
+        or last_token.endswith(("den", "oen"))
+    )
+
+    return bool(
+        compact.startswith("c")
+        and has_gia
+        and has_den
+        and SequenceMatcher(
+            None,
+            compact,
+            "cogiatriden",
+        ).ratio() >= 0.70
+    )
+
+
 def recover_labeled_date(
     raw_text: list[str] | None,
     field_name: str,
@@ -400,13 +629,28 @@ def recover_labeled_date(
         Ngay sinh / Date of birth: 24/0311995
     """
 
+    if field_name == "dateOfExpiry":
+        lines = [str(line) for line in raw_text or [] if line]
+
+        for index, line in enumerate(lines):
+            if not _looks_like_expiry_label(line):
+                continue
+
+            date = normalize_date(line)
+            if date:
+                return date
+
+            # Nhãn và ngày đôi khi bị EasyOCR tách thành hai dòng.
+            for next_line in lines[index + 1:index + 3]:
+                date = normalize_date(next_line)
+                if date:
+                    return date
+
+        return None
+
     patterns = {
         "dateOfBirth": (
             r"(?:ngay\s*sinh|date\s*of\s*birth)"
-        ),
-        "dateOfExpiry": (
-            r"(?:(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den"
-            r"|date\s*of\s*expiry)"
         ),
     }
 
@@ -450,25 +694,55 @@ def _clean_address_text(value: str | None) -> str | None:
     if not value:
         return None
 
-    text = remove_accents(value)
+    text = str(value)
+
+    # Tách theo thành phần địa chỉ để loại được cả nhãn hạn sử dụng bị
+    # OCR sai nặng. Nếu cùng thành phần có ngày và địa chỉ ở bên phải,
+    # chỉ bỏ nhãn + ngày và giữ phần địa chỉ.
+    cleaned_pieces: list[str] = []
+    for piece in re.split(r"[,;]", text):
+        normalized_digits = normalize_ocr_digits(piece)
+        date_match = re.search(
+            r"(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{4}(?!\d)",
+            normalized_digits,
+        )
+
+        if date_match and _looks_like_expiry_label(
+            piece[:date_match.start()]
+        ):
+            piece = piece[date_match.end():]
+        elif _looks_like_expiry_label(piece):
+            piece = ""
+
+        if piece.strip(" :/-"):
+            cleaned_pieces.append(piece)
+
+    text = ", ".join(cleaned_pieces)
+
+    def remove_pattern(pattern: str) -> None:
+        """Xóa nhãn theo bản không dấu nhưng giữ dấu trong địa chỉ."""
+        nonlocal text
+        plain_text = remove_accents(text)
+        matches = list(
+            re.finditer(
+                pattern,
+                plain_text,
+                flags=re.IGNORECASE,
+            )
+        )
+        for match in reversed(matches):
+            text = text[:match.start()] + " " + text[match.end():]
 
     # Loại cụm ngày hết hạn OCR sai nhẹ nhưng giữ phần địa chỉ phía sau.
-    text = re.sub(
-        r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den\s*"
-        r"\d{1,2}[./-]\d{1,2}[./-]\d{4}",
-        " ",
-        text,
-        flags=re.IGNORECASE,
+    remove_pattern(
+        rf"(?:{EXPIRY_LABEL_PATTERN})\s*"
+        r"\d{1,2}[./-]\d{1,2}[./-]\d{4}"
     )
 
-    text = re.sub(
-        r"\b(?:que\s*quan|place\s*of\s*origin|"
-        r"noi\s*thuong\s*tru|place\s*of\s*residence|"
-        r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den|date\s*of\s*expiry)"
-        r"\b\s*:?",
-        " ",
-        text,
-        flags=re.IGNORECASE,
+    remove_pattern(
+        rf"(?:que\s*quan|{ORIGIN_EN_LABEL_PATTERN}|"
+        rf"{RESIDENCE_VI_LABEL_PATTERN}|{RESIDENCE_EN_LABEL_PATTERN}|"
+        rf"{EXPIRY_LABEL_PATTERN})\s*:?"
     )
     text = re.sub(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b",
@@ -486,39 +760,182 @@ def _clean_address_text(value: str | None) -> str | None:
 
 def _is_expiry_line(value: str) -> bool:
     """Nhận diện dòng hạn sử dụng có thể chen giữa hai dòng địa chỉ."""
+    return _looks_like_expiry_label(value)
+
+
+def _contains_date(value: str) -> bool:
     return bool(
         re.search(
-            r"(?:co|c[o0])\s*[g9]ia\s*(?:tr[iyj1l]|t[1il])\s*den"
-            r"|date\s*of\s*expiry",
-            value,
-            flags=re.IGNORECASE,
+            r"(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{4}(?!\d)",
+            normalize_ocr_digits(value),
         )
     )
+
+
+def _is_date_only_line(value: str) -> bool:
+    normalized = normalize_ocr_digits(value)
+    without_date = re.sub(
+        r"(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{4}(?!\d)",
+        " ",
+        normalized,
+    )
+    return _contains_date(value) and not re.search(
+        r"[A-Za-zÀ-ỹ]",
+        without_date,
+    )
+
+
+def _address_suffix_after_date(value: str) -> str:
+    """Giữ phần địa chỉ ở bên phải ngày hết hạn trên dòng bị trộn cột."""
+    matches = list(
+        re.finditer(
+            r"(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{4}(?!\d)",
+            normalize_ocr_digits(value),
+        )
+    )
+    if not matches:
+        return ""
+    return value[matches[-1].end():].strip(" :;,/-\"")
+
+
+def _looks_like_garbled_expiry_prefix(
+    value: str,
+    following_value: str | None,
+) -> bool:
+    """Nhận diện nửa nhãn hạn sử dụng bị OCR tách khỏi dòng ngày."""
+    if not following_value or not _is_date_only_line(following_value):
+        return False
+    tokens = re.findall(r"[a-z0-9]+", _plain(value))
+    return 1 <= len(tokens) <= 4 and "," not in value and ";" not in value
+
+
+def _normalize_known_administrative_names(value: str) -> str:
+    text = value
+
+    for pattern, replacement in KNOWN_ADMINISTRATIVE_PHRASES:
+        plain_text = remove_accents(text)
+        matches = list(
+            re.finditer(pattern, plain_text, flags=re.IGNORECASE)
+        )
+        for match in reversed(matches):
+            text = text[:match.start()] + replacement + text[match.end():]
+
+    return text
+
+
+def _restore_address_accents(
+    primary: str,
+    alternatives: list[str | None],
+) -> str:
+    """
+    Lấy lại dấu từ nguồn OCR khác nhưng giữ thứ tự của địa chỉ chính.
+
+    Full-card OCR thường ghép dòng đúng hơn, còn field OCR được phóng to
+    nên thường đọc dấu tốt hơn. Chỉ thay một từ khi các nguồn có dấu đều
+    thống nhất về cùng một cách viết, tránh tự đoán dấu cho tên riêng.
+    """
+    def component_key(value: str) -> str:
+        plain = remove_accents(value).casefold()
+        plain = re.sub(r"[^a-z0-9]+", " ", plain)
+        return re.sub(r"\s+", " ", plain).strip()
+
+    alternative_components: dict[str, list[str]] = {}
+    identifier_variants: dict[str, set[str]] = {}
+
+    for alternative in alternatives:
+        if not alternative:
+            continue
+
+        for component in re.split(r"[,;]", alternative):
+            component = component.strip(" ,.;:/-")
+            key = component_key(component)
+            if key and component:
+                alternative_components.setdefault(key, []).append(component)
+
+        for token in re.findall(r"[^\W_]+", alternative, flags=re.UNICODE):
+            if not any(character.isdigit() for character in token):
+                continue
+            key = remove_accents(token).casefold().translate(
+                str.maketrans({"8": "b", "0": "o", "1": "i", "5": "s"})
+            )
+            identifier_variants.setdefault(key, set()).add(token)
+
+    restored_components: list[str] = []
+    for component in re.split(r"[,;]", primary):
+        component = component.strip(" ,.;:/-")
+        if not component:
+            continue
+
+        key = component_key(component)
+        candidates = alternative_components.get(key, [])
+
+        # Chỉ lấy nguyên cụm từ nguồn khác khi cụm chính hoàn toàn không
+        # dấu và các nguồn có dấu thống nhất. So khớp theo cả cụm tránh
+        # lỗi "Thành phố Thanh Hóa" biến thành "Thành phố Thành Hóa".
+        if _diacritic_score(component) == 0 and candidates:
+            accented = {
+                candidate.casefold(): candidate
+                for candidate in candidates
+                if _diacritic_score(candidate) > 0
+            }
+            if len(accented) == 1:
+                component = next(iter(accented.values()))
+
+        restored_components.append(component)
+
+    restored = ", ".join(restored_components)
+
+    def replace_identifier(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if not token.isdigit():
+            return token
+        key = token.casefold().translate(
+            str.maketrans({"8": "b", "0": "o", "1": "i", "5": "s"})
+        )
+        mixed = [
+            item
+            for item in identifier_variants.get(key, set())
+            if any(character.isdigit() for character in item)
+            and any(character.isalpha() for character in item)
+        ]
+        return mixed[0] if len(mixed) == 1 else token
+
+    restored = re.sub(r"\b\d+\b", replace_identifier, restored)
+    return _normalize_known_administrative_names(restored)
 
 
 def recover_address(
     raw_text: list[str] | None,
     field_name: str,
 ) -> str | None:
-    lines = [remove_accents(str(line)) for line in raw_text or [] if line]
+    lines = [str(line) for line in raw_text or [] if line]
 
     if field_name == "placeOfOrigin":
         label_pattern = (
-            r"(?:que\s*quan\s*/?\s*(?:place\s*of\s*origin)?"
-            r"|place\s*of\s*origin)\s*:?"
+            rf"(?:que\s*quan(?:\s*/?\s*(?:{ORIGIN_EN_LABEL_PATTERN}))?"
+            rf"|{ORIGIN_EN_LABEL_PATTERN})\s*:?"
         )
-        stop_pattern = r"\b(?:noi\s*thuong\s*tru|place\s*of\s*residence|date\s*of\s*expiry)\b"
+        stop_pattern = (
+            rf"(?:{RESIDENCE_VI_LABEL_PATTERN}|"
+            rf"{RESIDENCE_EN_LABEL_PATTERN}|date\s*of\s*expiry)"
+        )
         max_pieces = 2
     else:
         label_pattern = (
-            r"(?:noi\s*thuong\s*tru\s*/?\s*(?:place\s*of\s*residence)?"
-            r"|place\s*of\s*residence)\s*:?"
+            rf"(?:{RESIDENCE_VI_LABEL_PATTERN}"
+            rf"(?:\s*/?\s*(?:{RESIDENCE_EN_LABEL_PATTERN}))?"
+            rf"|{RESIDENCE_EN_LABEL_PATTERN})\s*:?"
         )
         stop_pattern = r"\b(?:date\s*of\s*expiry)\b"
         max_pieces = 3
 
     for index, line in enumerate(lines):
-        label_match = re.search(label_pattern, line, flags=re.IGNORECASE)
+        plain_line = remove_accents(line)
+        label_match = re.search(
+            label_pattern,
+            plain_line,
+            flags=re.IGNORECASE,
+        )
         if not label_match:
             continue
 
@@ -533,12 +950,28 @@ def recover_address(
             tokens = re.findall(r"[a-z0-9]+", _plain(cleaned))
             return len(tokens) >= 2 and not all(len(token) == 1 for token in tokens)
 
-        if usable(before):
-            pieces.append(before)
-        if usable(after):
-            pieces.append(after)
+        # Nếu line merger từng ghép nhầm hai cột, thứ tự vật lý là:
+        # ngày hết hạn -> dòng cuối địa chỉ -> nhãn nơi thường trú ->
+        # dòng đầu địa chỉ. Đưa phần sau nhãn lên trước rồi mới nối phần
+        # địa chỉ nằm sau ngày để khôi phục đúng thứ tự.
+        mixed_column_suffix = (
+            _address_suffix_after_date(before)
+            if field_name == "placeOfResidence"
+            else ""
+        )
 
-        for next_line in lines[index + 1:index + 4]:
+        if mixed_column_suffix and usable(after):
+            pieces.append(after)
+            if usable(mixed_column_suffix):
+                pieces.append(mixed_column_suffix)
+        else:
+            if usable(before):
+                pieces.append(before)
+            if usable(after):
+                pieces.append(after)
+
+        following_lines = lines[index + 1:index + 7]
+        for offset, next_line in enumerate(following_lines):
             # EasyOCR sắp xếp theo tọa độ dọc. Trên CCCD, dòng
             # "Có giá trị đến" ở bên trái có thể nằm giữa hai dòng
             # nơi thường trú ở bên phải. Bỏ qua riêng dòng hạn sử dụng
@@ -547,11 +980,35 @@ def recover_address(
                 field_name == "placeOfResidence"
                 and _is_expiry_line(next_line)
             ):
+                address_suffix = _address_suffix_after_date(
+                    next_line
+                )
+                if usable(address_suffix):
+                    pieces.append(address_suffix)
                 continue
 
-            if re.search(stop_pattern, next_line, flags=re.IGNORECASE):
+            following_value = (
+                following_lines[offset + 1]
+                if offset + 1 < len(following_lines)
+                else None
+            )
+            if (
+                field_name == "placeOfResidence"
+                and _looks_like_garbled_expiry_prefix(
+                    next_line,
+                    following_value,
+                )
+            ):
+                continue
+
+            plain_next_line = remove_accents(next_line)
+            if re.search(
+                stop_pattern,
+                plain_next_line,
+                flags=re.IGNORECASE,
+            ):
                 break
-            if STOP_LABEL_PATTERN.search(next_line):
+            if STOP_LABEL_PATTERN.search(plain_next_line):
                 break
             if usable(next_line):
                 pieces.append(next_line.strip(" :;,/-\""))
@@ -614,22 +1071,82 @@ def select_address(
     full_value = _clean_address_text(full_card_value)
     field_clean = _clean_address_text(field_value)
 
-    if raw_value and is_valid_address(raw_value, field_name):
-        return raw_value, "RAW_TEXT_RECOVERY"
+    candidates = (
+        (raw_value, "RAW_TEXT_RECOVERY"),
+        (full_value, "FULL_CARD_OCR"),
+        (field_clean, "FIELD_OCR"),
+    )
 
-    if full_value and is_valid_address(full_value, field_name):
-        return full_value, "FULL_CARD_OCR"
-
-    if field_clean and is_valid_address(field_clean, field_name):
-        return field_clean, "FIELD_OCR"
+    for value, source in candidates:
+        if value and is_valid_address(value, field_name):
+            return (
+                _restore_address_accents(
+                    value,
+                    [raw_value, full_value, field_clean],
+                ),
+                source,
+            )
 
     return None, "NOT_FOUND"
+
+
+def _diacritic_score(value: str) -> int:
+    """Đếm dấu/ký tự riêng tiếng Việt để ưu tiên nguồn giàu dấu hơn."""
+    decomposed = unicodedata.normalize("NFD", value)
+    combining_marks = sum(
+        unicodedata.category(character) == "Mn"
+        for character in decomposed
+    )
+    vietnamese_d = sum(character in "Đđ" for character in value)
+    return combining_marks + vietnamese_d
+
+
+def _name_key(value: str) -> str:
+    return re.sub(r"\s+", " ", remove_accents(value).upper()).strip()
+
+
+def _restore_name_diacritics(
+    value: str,
+    gender_hint: str | None,
+) -> str:
+    """
+    Phục hồi có kiểm soát cho họ phổ biến và tên đệm theo giới tính.
+
+    Không dùng một từ điển chung để đoán mọi âm tiết vì cùng một chuỗi
+    không dấu có thể tương ứng nhiều tên hợp lệ khác nhau.
+    """
+    if not gender_hint:
+        return value
+
+    words = value.split()
+    if not words:
+        return value
+
+    surname_key = remove_accents(words[0]).upper()
+    surname = COMMON_VIETNAMESE_SURNAMES.get(surname_key)
+    if surname:
+        words[0] = surname
+
+    contextual_map: dict[str, str] = {}
+    if gender_hint == "Nữ":
+        contextual_map = FEMALE_NAME_DIACRITICS
+    elif gender_hint == "Nam":
+        contextual_map = MALE_NAME_DIACRITICS
+
+    for index in range(1, len(words)):
+        word_key = remove_accents(words[index]).upper()
+        replacement = contextual_map.get(word_key)
+        if replacement:
+            words[index] = replacement
+
+    return " ".join(words)
 
 
 def select_full_name(
     field_value: str | None,
     full_card_value: str | None,
     raw_text: list[str] | None,
+    gender_hint: str | None = None,
 ) -> tuple[str | None, str]:
     """
     Chọn họ tên theo thứ tự ưu tiên:
@@ -643,23 +1160,45 @@ def select_full_name(
     RAW_TEXT_RECOVERY chỉ vì raw_text cũng đọc ra cùng giá trị.
     """
 
-    full_name = normalize_full_name(
-        full_card_value
-    )
-    if full_name:
-        return full_name, "FULL_CARD_OCR"
+    full_name = normalize_full_name(full_card_value)
+    raw_name = recover_full_name(raw_text)
+    field_name = normalize_full_name(field_value)
+    alternatives = [full_name, raw_name, field_name]
+    candidates = [
+        (full_name, "FULL_CARD_OCR"),
+        (raw_name, "RAW_TEXT_RECOVERY"),
+        (field_name, "FIELD_OCR"),
+    ]
 
-    raw_name = recover_full_name(
-        raw_text
-    )
-    if raw_name:
-        return raw_name, "RAW_TEXT_RECOVERY"
+    selected_value: str | None = None
+    selected_source = "NOT_FOUND"
 
-    field_name = normalize_full_name(
-        field_value
-    )
-    if field_name:
-        return field_name, "FIELD_OCR"
+    for candidate, source in candidates:
+        if candidate:
+            selected_value = candidate
+            selected_source = source
+            break
+
+    if selected_value:
+        # Nếu các nguồn cùng chữ gốc, chọn bản nhận được nhiều dấu hơn.
+        equivalent_candidates = [
+            (candidate, source)
+            for candidate, source in candidates
+            if candidate and _name_key(candidate) == _name_key(selected_value)
+        ]
+        selected_value, selected_source = max(
+            equivalent_candidates,
+            key=lambda item: _diacritic_score(item[0]),
+        )
+        selected_value = _reconcile_disputed_surname(
+            selected_value,
+            alternatives,
+        )
+        selected_value = _restore_name_diacritics(
+            selected_value,
+            gender_hint,
+        )
+        return selected_value, selected_source
 
     return None, "NOT_FOUND"
 
@@ -762,10 +1301,17 @@ def fuse_ocr_data(
         else "NOT_FOUND"
     )
 
+    gender_hint = (
+        recover_gender(raw_text)
+        or normalize_gender(full_card.get("gender"))
+        or normalize_gender(fields.get("gender"))
+    )
+
     full_name, source = select_full_name(
         fields.get("fullName"),
         full_card.get("fullName"),
         raw_text,
+        gender_hint=gender_hint,
     )
     result["fullName"] = full_name
     sources["fullName"] = source

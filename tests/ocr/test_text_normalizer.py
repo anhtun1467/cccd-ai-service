@@ -38,7 +38,7 @@ def main() -> None:
     test_cases: list[tuple[str, str]] = [
         (
             "Vict Nana",
-            "Viet Nam",
+            "Việt Nam",
         ),
         (
             "Ha_Noi",
@@ -50,7 +50,7 @@ def main() -> None:
         ),
         (
             "Hova ten / Full name:",
-            "Ho va ten/Full name:",
+            "Ho va ten / Full name:",
         ),
         (
             "CONG_DAN",
@@ -58,11 +58,11 @@ def main() -> None:
         ),
         (
             "Gioitinh / Sex:",
-            "Gioi tinh/Sex:",
+            "Gioi tinh / Sex:",
         ),
         (
             "Ngay sinh / Date ofbirth:",
-            "Ngay sinh/Date of birth:",
+            "Ngay sinh / Date of birth:",
         ),
         (
             "Date ofDxpiry",
@@ -75,6 +75,14 @@ def main() -> None:
         (
             "Noi   thuong   tru",
             "Noi thuong tru",
+        ),
+        (
+            "Que quan / Place ol ongin:",
+            "Que quan / Place of origin :",
+        ),
+        (
+            "Noi thưong tú / Place of 'residonceThôn 48",
+            "Noi thuong tru / Place of residence Thôn 48",
         ),
     ]
 

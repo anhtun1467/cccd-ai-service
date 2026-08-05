@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from app.modules.card_detection.detector import CardDetector
 from app.modules.card_detection.image_enhancer import cccd_image_enhancer
 from app.modules.ocr.field_ocr_service import field_ocr_service
 from app.modules.ocr.line_merger import OCRLineMerger
-from app.modules.ocr.result_fuser import fuse_ocr_data
+from app.modules.ocr.result_fuser import fuse_ocr_data, remove_accents
 from app.modules.ocr.service import ocr_service
 from app.modules.ocr.validator import CCCDValidator
 
@@ -44,6 +45,9 @@ class OcrPipelineService:
         "placeOfResidence",
         "dateOfExpiry",
     )
+
+    ORIENTATION_RETRY_THRESHOLD = 7.0
+    ORIENTATION_SELECTION_MARGIN = 1.5
 
     def __init__(self) -> None:
         self.card_detector = CardDetector()
@@ -199,6 +203,32 @@ class OcrPipelineService:
         full_ocr_result = self.run_full_card_ocr(
             image_path=card_output_path,
         )
+
+        (
+            card_image,
+            enhanced_image,
+            full_ocr_result,
+            orientation_info,
+        ) = self.ensure_upright_orientation(
+            card_image=card_image,
+            enhanced_image=enhanced_image,
+            card_output_path=card_output_path,
+            enhanced_output_path=enhanced_output_path,
+            debug_dir=debug_dir,
+            first_ocr_result=full_ocr_result,
+        )
+
+        geometry_rotation = int(
+            detection_result.get("geometry", {}).get(
+                "geometryRotationDegrees",
+                0,
+            )
+        )
+        orientation_info["geometryRotationDegrees"] = geometry_rotation
+        orientation_info["totalRotationDegrees"] = (
+            geometry_rotation
+            + int(orientation_info.get("contentRotationDegrees", 0))
+        ) % 360
 
         field_ocr_result = self.run_field_ocr(
             card_image_path=card_output_path,
@@ -360,6 +390,12 @@ class OcrPipelineService:
                     json_output_path
                 ),
                 "fieldDebug": field_debug,
+                "geometry": self.make_json_safe(
+                    detection_result.get("geometry", {})
+                ),
+                "orientation": self.make_json_safe(
+                    orientation_info
+                ),
                 "resizeRatio": self.make_json_safe(
                     detection_result.get(
                         "resizeRatio",
@@ -420,6 +456,152 @@ class OcrPipelineService:
                     f"{error}"
                 )
             )
+
+    @staticmethod
+    def calculate_orientation_score(
+        ocr_result: dict[str, Any],
+    ) -> float:
+        """Chấm điểm chiều ảnh từ các nhãn cố định trên mặt trước CCCD."""
+        lines = ocr_result.get(
+            "normalizedText",
+            ocr_result.get("rawText", []),
+        )
+        if isinstance(lines, str):
+            lines = lines.splitlines()
+        if not isinstance(lines, list):
+            lines = []
+
+        text = remove_accents(
+            " ".join(str(line) for line in lines if line)
+        ).lower()
+        text = re.sub(r"\s+", " ", text)
+
+        weighted_patterns = (
+            (r"can\s*cuoc\s*cong\s*dan", 3.0),
+            (r"citizen\s*identity\s*card", 2.0),
+            (r"ho\s*va\s*ten|full\s*name", 2.0),
+            (r"ngay\s*sinh|date\s*of\s*birth", 2.0),
+            (r"gioi\s*tinh|\bsex\b", 1.0),
+            (r"quoc\s*tich|nationality", 1.0),
+            (r"que\s*quan|place\s*of\s*origin", 1.0),
+            (r"noi\s*thuong\s*tru|place\s*of\s*residence", 1.0),
+            (r"co\s*gia\s*tri\s*den|date\s*of\s*expiry", 1.0),
+        )
+
+        score = sum(
+            weight
+            for pattern, weight in weighted_patterns
+            if re.search(pattern, text, flags=re.IGNORECASE)
+        )
+
+        if re.search(r"(?<!\d)\d{12}(?!\d)", text):
+            score += 3.0
+        if re.search(r"\d{1,2}/\d{1,2}/\d{4}", text):
+            score += 1.0
+        if len(lines) >= 8:
+            score += 0.5
+
+        structured_data = ocr_result.get("structuredData", {})
+        if isinstance(structured_data, dict):
+            identifier = re.sub(
+                r"\D",
+                "",
+                str(structured_data.get("idNumber") or ""),
+            )
+            if len(identifier) == 12:
+                score += 1.0
+
+        return round(float(score), 2)
+
+    def ensure_upright_orientation(
+        self,
+        card_image: Any,
+        enhanced_image: Any,
+        card_output_path: Path,
+        enhanced_output_path: Path,
+        debug_dir: Path,
+        first_ocr_result: dict[str, Any],
+    ) -> tuple[Any, Any, dict[str, Any], dict[str, Any]]:
+        """
+        Nếu OCR chiều đầu tiên yếu, thử xoay 180 độ và giữ chiều tốt hơn.
+
+        Bước perspective đã đưa ảnh dọc về ngang. Việc thử 180 độ này xử
+        lý cả ảnh úp ngược lẫn trường hợp xoay 90 độ theo hướng còn lại.
+        """
+        first_score = self.calculate_orientation_score(first_ocr_result)
+        orientation_info: dict[str, Any] = {
+            "contentRotationDegrees": 0,
+            "orientationRetried": False,
+            "initialScore": first_score,
+            "rotatedScore": None,
+        }
+
+        final_debug_path = debug_dir / "detector_05_oriented.jpg"
+
+        if first_score >= self.ORIENTATION_RETRY_THRESHOLD:
+            cv2.imwrite(str(final_debug_path), card_image)
+            orientation_info["selectedScore"] = first_score
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                orientation_info,
+            )
+
+        rotated_card = cv2.rotate(card_image, cv2.ROTATE_180)
+        rotated_enhanced = cv2.rotate(enhanced_image, cv2.ROTATE_180)
+        orientation_info["orientationRetried"] = True
+
+        candidate_saved = cv2.imwrite(
+            str(card_output_path),
+            rotated_card,
+        )
+        enhanced_candidate_saved = cv2.imwrite(
+            str(enhanced_output_path),
+            rotated_enhanced,
+        )
+
+        if not candidate_saved or not enhanced_candidate_saved:
+            cv2.imwrite(str(card_output_path), card_image)
+            cv2.imwrite(str(enhanced_output_path), enhanced_image)
+            cv2.imwrite(str(final_debug_path), card_image)
+            orientation_info["retryError"] = (
+                "Không thể lưu ảnh ứng viên xoay 180 độ"
+            )
+            orientation_info["selectedScore"] = first_score
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                orientation_info,
+            )
+
+        rotated_ocr_result = self.run_full_card_ocr(card_output_path)
+        rotated_score = self.calculate_orientation_score(rotated_ocr_result)
+        orientation_info["rotatedScore"] = rotated_score
+
+        if rotated_score >= first_score + self.ORIENTATION_SELECTION_MARGIN:
+            cv2.imwrite(str(final_debug_path), rotated_card)
+            orientation_info["contentRotationDegrees"] = 180
+            orientation_info["selectedScore"] = rotated_score
+            return (
+                rotated_card,
+                rotated_enhanced,
+                rotated_ocr_result,
+                orientation_info,
+            )
+
+        # Chiều ban đầu tốt hơn hoặc hai chiều chưa đủ chênh lệch.
+        cv2.imwrite(str(card_output_path), card_image)
+        cv2.imwrite(str(enhanced_output_path), enhanced_image)
+        cv2.imwrite(str(final_debug_path), card_image)
+        orientation_info["selectedScore"] = first_score
+        return (
+            card_image,
+            enhanced_image,
+            first_ocr_result,
+            orientation_info,
+        )
 
     def run_field_ocr(
         self,

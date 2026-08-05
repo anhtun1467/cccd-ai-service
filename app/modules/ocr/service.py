@@ -29,8 +29,12 @@ class OCRService:
         self.engine = engine or EasyOCREngine()
 
         self.line_merger = OCRLineMerger(
-            vertical_tolerance_ratio=0.6,
-            maximum_horizontal_gap_ratio=3.5,
+            # Ngưỡng cũ 0.6/3.5 làm các box ở hai cột cuối thẻ
+            # (hạn sử dụng bên trái, nơi thường trú bên phải) bị nối
+            # thành một dòng. Ngưỡng chặt hơn vẫn ghép được các cụm
+            # cùng dòng nhưng giữ hai vùng này độc lập.
+            vertical_tolerance_ratio=0.25,
+            maximum_horizontal_gap_ratio=1.8,
         )
 
         self.parser = CCCDRegexParser()

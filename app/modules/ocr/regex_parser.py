@@ -53,7 +53,7 @@ class CCCDRegexParser:
         upper_text = text.upper()
 
         if "VIET" in upper_text or "VICT" in upper_text or "NANA" in upper_text:
-            return "Viet Nam"
+            return "Việt Nam"
 
         return None
 

@@ -39,13 +39,17 @@ class CardDetector:
         if card_contour is None:
             raise BadRequestException("Không phát hiện được vùng CCCD")
 
-        warped = self.transformer.transform(resized, card_contour)
+        warped, geometry = self.transformer.transform_with_metadata(
+            resized,
+            card_contour,
+        )
         enhanced_images = self.enhancer.enhance(warped)
 
         result = {
             "success": True,
             "message": "Phát hiện CCCD thành công",
             "resizeRatio": ratio,
+            "geometry": geometry,
             "cardImage": warped,
             "enhancedImage": enhanced_images["final"],
             "debug": {

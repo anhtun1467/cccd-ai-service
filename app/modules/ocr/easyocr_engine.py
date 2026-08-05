@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -9,16 +9,26 @@ from app.modules.ocr.models import OCRResult, OCRTextBox
 from app.modules.ocr.text_normalizer import OCRTextNormalizer
 
 
-class EasyOCREngine(BaseOCREngine):
-    """
-    OCR Engine sß╗¡ dß╗Ñng EasyOCR.
+VIETNAMESE_LETTERS = (
+    "AÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬ"
+    "EÈÉẺẼẸÊỀẾỂỄỆ"
+    "IÌÍỈĨỊ"
+    "OÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢ"
+    "UÙÚỦŨỤƯỪỨỬỮỰ"
+    "YỲÝỶỸỴĐ"
+)
 
-    Quy tr├¼nh:
-    1. ─Éß╗ìc v─ân bß║ún tß╗½ ß║únh.
-    2. Chuß║⌐n h├│a khoß║úng trß║»ng v├á c├íc nh├ún CCCD.
-    3. Chuyß╗ân tß╗ìa ─æß╗Ö bounding box sang kiß╗âu JSON-safe.
-    4. Trß║ú vß╗ü OCRResult.
-    """
+VIETNAMESE_ALLOWLIST = (
+    "0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    f"{VIETNAMESE_LETTERS}{VIETNAMESE_LETTERS.lower()}"
+    " /.,:;-'()"
+)
+
+
+class EasyOCREngine(BaseOCREngine):
+    """EasyOCR được cấu hình riêng cho mặt trước CCCD tiếng Việt."""
 
     def __init__(
         self,
@@ -31,20 +41,11 @@ class EasyOCREngine(BaseOCREngine):
         )
 
     def recognize(self, image_path: str) -> OCRResult:
-        """
-        Nhß║¡n dß║íng v─ân bß║ún trong ß║únh.
-
-        Args:
-            image_path: ─É╞░ß╗¥ng dß║½n ─æß║┐n ß║únh cß║ºn OCR.
-
-        Returns:
-            OCRResult chß╗⌐a danh s├ích v─ân bß║ún v├á c├íc bounding box.
-        """
-
+        """Nhận dạng chữ, số và đầy đủ dấu tiếng Việt trên ảnh."""
         if not image_path or not image_path.strip():
             return OCRResult(
                 success=False,
-                message="─É╞░ß╗¥ng dß║½n ß║únh kh├┤ng hß╗úp lß╗ç",
+                message="Đường dẫn ảnh không hợp lệ",
                 raw_text=[],
                 text_boxes=[],
             )
@@ -54,11 +55,29 @@ class EasyOCREngine(BaseOCREngine):
                 image_path,
                 detail=1,
                 paragraph=False,
+                decoder="beamsearch",
+                beamWidth=5,
+                batch_size=1,
+                workers=0,
+                allowlist=VIETNAMESE_ALLOWLIST,
+                min_size=5,
+                text_threshold=0.55,
+                low_text=0.30,
+                link_threshold=0.30,
+                canvas_size=2560,
+                mag_ratio=1.5,
+                slope_ths=0.15,
+                ycenter_ths=0.50,
+                height_ths=0.50,
+                width_ths=0.80,
+                add_margin=0.08,
+                contrast_ths=0.05,
+                adjust_contrast=0.70,
             )
         except Exception as error:
             return OCRResult(
                 success=False,
-                message=f"EasyOCR thß║Ñt bß║íi: {error}",
+                message=f"EasyOCR thất bại: {error}",
                 raw_text=[],
                 text_boxes=[],
             )
@@ -77,13 +96,12 @@ class EasyOCREngine(BaseOCREngine):
             if not original_text:
                 continue
 
+            # Normalizer chỉ sửa nhãn; phần dữ liệu tiếng Việt vẫn giữ dấu.
             normalized_text = OCRTextNormalizer.normalize(original_text)
-
             if not normalized_text:
                 continue
 
             raw_text.append(normalized_text)
-
             text_boxes.append(
                 OCRTextBox(
                     text=normalized_text,
@@ -95,41 +113,28 @@ class EasyOCREngine(BaseOCREngine):
         if not text_boxes:
             return OCRResult(
                 success=False,
-                message="Kh├┤ng ph├ít hiß╗çn ─æ╞░ß╗úc v─ân bß║ún trong ß║únh",
+                message="Không phát hiện được văn bản trong ảnh",
                 raw_text=[],
                 text_boxes=[],
             )
 
         return OCRResult(
             success=True,
-            message="OCR th├ánh c├┤ng",
+            message="OCR thành công",
             raw_text=raw_text,
             text_boxes=text_boxes,
         )
 
     @staticmethod
-    def convert_box_to_json_safe(
-        box: Any,
-    ) -> list[list[float]]:
-        """
-        Chuyß╗ân tß╗ìa ─æß╗Ö bounding box cß╗ºa EasyOCR sang danh s├ích float
-        ─æß╗â c├│ thß╗â serialize th├ánh JSON.
-        """
-
+    def convert_box_to_json_safe(box: Any) -> list[list[float]]:
+        """Chuyển tọa độ bounding box sang dữ liệu JSON-safe."""
         if box is None:
             return []
 
         converted_box: list[list[float]] = []
-
         for point in box:
             if not isinstance(point, (list, tuple)) or len(point) < 2:
                 continue
-
-            converted_box.append(
-                [
-                    float(point[0]),
-                    float(point[1]),
-                ]
-            )
+            converted_box.append([float(point[0]), float(point[1])])
 
         return converted_box
