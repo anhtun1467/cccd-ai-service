@@ -20,10 +20,15 @@ class ImageEnhancer:
     def adjust_brightness_contrast(
         self,
         image: np.ndarray,
-        alpha: float = 1.15,
-        beta: int = 8,
+        alpha: float = 1.08,
+        beta: int = 3,
     ) -> np.ndarray:
-
+        # Không đẩy sáng mạnh ảnh CCCD vốn đã có nền vàng/trắng. Cháy nền
+        # làm mất các dấu thanh nhỏ trước khi OCR kịp nhận dạng.
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if float(np.mean(gray)) >= 175.0:
+            alpha = min(alpha, 1.02)
+            beta = min(beta, 1)
         return cv2.convertScaleAbs(
             image,
             alpha=alpha,
@@ -56,19 +61,20 @@ class ImageEnhancer:
         self,
         image: np.ndarray,
     ) -> np.ndarray:
-
-        kernel = np.array(
-            [
-                [0, -1, 0],
-                [-1, 5, -1],
-                [0, -1, 0],
-            ]
-        )
-
-        return cv2.filter2D(
+        # Kernel 5 điểm cũ tạo viền đen/trắng dày quanh chữ mờ. Unsharp
+        # mask nhẹ giữ được nét dấu tiếng Việt và ít tạo ký tự giả hơn.
+        blurred = cv2.GaussianBlur(
             image,
-            -1,
-            kernel,
+            (0, 0),
+            sigmaX=0.85,
+            sigmaY=0.85,
+        )
+        return cv2.addWeighted(
+            image,
+            1.35,
+            blurred,
+            -0.35,
+            0,
         )
 
     def denoise(
@@ -76,13 +82,11 @@ class ImageEnhancer:
         image: np.ndarray,
     ) -> np.ndarray:
 
-        return cv2.fastNlMeansDenoisingColored(
+        return cv2.bilateralFilter(
             image,
-            None,
-            5,
-            5,
-            7,
-            21,
+            d=5,
+            sigmaColor=25,
+            sigmaSpace=25,
         )
 
     def enhance(
@@ -92,16 +96,18 @@ class ImageEnhancer:
 
         brightness = self.adjust_brightness_contrast(image)
 
-        clahe = self.apply_clahe(brightness)
+        # Khử nhiễu trước khi tăng tương phản/nét để không khuếch đại hoa
+        # văn bảo an thành các nét giống chữ.
+        denoise = self.denoise(brightness)
+
+        clahe = self.apply_clahe(denoise)
 
         sharpen = self.sharpen(clahe)
-
-        denoise = self.denoise(sharpen)
 
         return {
             "brightness": brightness,
             "clahe": clahe,
             "sharpen": sharpen,
             "denoise": denoise,
-            "final": denoise,
+            "final": sharpen,
         }

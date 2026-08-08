@@ -11,10 +11,10 @@ def test_camera(
     backend_name: str,
 ) -> bool:
     """
-    Ki?m tra m?t camera index.
+    Kiểm tra một camera index.
 
     Returns:
-        True n?u camera m? và d?c du?c h́nh ?nh.
+        True nếu camera mở và đọc được hình ảnh.
     """
     camera = cv2.VideoCapture(index, backend)
 
@@ -56,7 +56,7 @@ def find_available_cameras(
     max_index: int = 10,
 ) -> list[int]:
     """
-    T́m toàn b? camera có th? s? d?ng.
+    Tìm toàn bộ camera có thể sử dụng.
     """
     available_indices: set[int] = set()
 
@@ -88,7 +88,7 @@ def find_available_cameras(
 
 def main() -> None:
     print("=" * 70)
-    print("TIM CAMERA TREN WINDOWS")
+    print("TÌM CAMERA TRÊN WINDOWS")
     print("=" * 70)
 
     camera_indices = find_available_cameras(
@@ -98,16 +98,16 @@ def main() -> None:
     print("=" * 70)
 
     if not camera_indices:
-        print("[ERROR] Khong tim thay camera nao.")
+        print("[ERROR] Không tìm thấy camera nào.")
         print("")
-        print("Kiem tra:")
-        print("1. Logitech C922 da cam vao USB.")
-        print("2. Da dong Camera, OBS, Zoom, Discord.")
-        print("3. Windows cho phep ung dung desktop dung camera.")
+        print("Kiểm tra:")
+        print("1. Logitech C922 đã cắm vào USB.")
+        print("2. Đã đóng Camera, OBS, Zoom và Discord.")
+        print("3. Windows cho phép ứng dụng desktop dùng camera.")
         return
 
     print(
-        "Camera index kha dung: "
+        "Camera index khả dụng: "
         f"{camera_indices}"
     )
 

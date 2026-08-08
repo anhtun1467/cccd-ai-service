@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-# Thêm thu m?c g?c d? án vào Python path.
+# Thêm thư mục gốc dự án vào Python path.
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 if str(ROOT_DIR) not in sys.path:
@@ -26,35 +26,35 @@ WINDOW_NAME = "Logitech C922 Preview"
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Xem truc tiep hinh anh tu Logitech C922."
+        description="Xem trực tiếp hình ảnh từ Logitech C922."
     )
 
     parser.add_argument(
         "--camera",
         type=int,
         default=0,
-        help="Camera index. Mac dinh: 0.",
+        help="Camera index. Mặc định: 0.",
     )
 
     parser.add_argument(
         "--width",
         type=int,
         default=1280,
-        help="Chieu rong. Mac dinh: 1280.",
+        help="Chiều rộng. Mặc định: 1280.",
     )
 
     parser.add_argument(
         "--height",
         type=int,
         default=720,
-        help="Chieu cao. Mac dinh: 720.",
+        help="Chiều cao. Mặc định: 720.",
     )
 
     parser.add_argument(
         "--fps",
         type=int,
         default=30,
-        help="FPS mong muon. Mac dinh: 30.",
+        help="FPS mong muốn. Mặc định: 30.",
     )
 
     return parser.parse_args()
@@ -123,8 +123,8 @@ def main() -> None:
     )
     print(f"Requested FPS: {args.fps}")
     print()
-    print("Nhan S de luu anh.")
-    print("Nhan Q hoac ESC de thoat.")
+    print("Nhấn S để lưu ảnh.")
+    print("Nhấn Q hoặc ESC để thoát.")
 
     saved_image_number = 0
 
@@ -143,7 +143,7 @@ def main() -> None:
             f"{actual_width}x{actual_height}"
         )
         print(f"Actual FPS: {actual_fps:.1f}")
-        print("Camera da mo thanh cong.")
+        print("Camera đã mở thành công.")
 
         while True:
             frame = source.capture_frame()
@@ -179,9 +179,9 @@ def main() -> None:
                 )
 
                 if saved:
-                    print(f"Da luu anh: {output_path}")
+                    print(f"Đã lưu ảnh: {output_path}")
                 else:
-                    print("[ERROR] Khong luu duoc anh.")
+                    print("[ERROR] Không lưu được ảnh.")
 
     except FaceImageSourceError as error:
         print(f"[ERROR] {error}")
@@ -190,7 +190,7 @@ def main() -> None:
     finally:
         source.close()
         cv2.destroyAllWindows()
-        print("Da dong camera.")
+        print("Đã đóng camera.")
 
 
 if __name__ == "__main__":

@@ -2,49 +2,25 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Type
 
 import numpy as np
 
 
 class FaceImageSourceError(RuntimeError):
-    """
-    L?i x?y ra khi m? ho?c d?c ?nh t? ngu?n camera.
-    """
+    """Lỗi khi mở hoặc đọc ảnh từ nguồn camera."""
 
 
 class FaceImageSource(ABC):
-    """
-    Interface chung cho các ngu?n ?nh khuôn m?t.
-
-    Sau này Logitech C922, camera IP ho?c ?nh t? máy ch?m công
-    d?u có th? tri?n khai theo interface này.
-    """
+    """Giao diện chung cho webcam và các nguồn ảnh camera khác."""
 
     @abstractmethod
-    def open(self) -> None:
-        """
-        M? k?t n?i t?i ngu?n ?nh.
-        """
+    def open(self) -> None: ...
 
     @abstractmethod
-    def capture_frame(self) -> np.ndarray:
-        """
-        Ch?p m?t frame.
-
-        Returns:
-            ?nh d?ng NumPy BGR.
-
-        Raises:
-            FaceImageSourceError:
-                N?u ngu?n chua m? ho?c không d?c du?c frame.
-        """
+    def capture_frame(self) -> np.ndarray: ...
 
     @abstractmethod
-    def close(self) -> None:
-        """
-        Đóng k?t n?i t?i ngu?n ?nh.
-        """
+    def close(self) -> None: ...
 
     def __enter__(self) -> "FaceImageSource":
         self.open()
@@ -52,7 +28,7 @@ class FaceImageSource(ABC):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:

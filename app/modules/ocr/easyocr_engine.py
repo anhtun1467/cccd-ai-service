@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import easyocr
@@ -26,6 +27,14 @@ VIETNAMESE_ALLOWLIST = (
     " /.,:;-'()"
 )
 
+NUMERIC_ALLOWLIST = "0123456789/.- "
+
+FIELD_ALLOWLISTS: dict[str, str] = {
+    "idNumber": "0123456789 ",
+    "dateOfBirth": NUMERIC_ALLOWLIST,
+    "dateOfExpiry": NUMERIC_ALLOWLIST,
+}
+
 
 class EasyOCREngine(BaseOCREngine):
     """EasyOCR được cấu hình riêng cho mặt trước CCCD tiếng Việt."""
@@ -42,6 +51,33 @@ class EasyOCREngine(BaseOCREngine):
 
     def recognize(self, image_path: str) -> OCRResult:
         """Nhận dạng chữ, số và đầy đủ dấu tiếng Việt trên ảnh."""
+        return self._recognize(
+            image_path=image_path,
+            allowlist=VIETNAMESE_ALLOWLIST,
+            field_mode=False,
+        )
+
+    def recognize_field(
+        self,
+        image_path: str,
+        field_name: str,
+    ) -> OCRResult:
+        """OCR một vùng field với bảng ký tự và ngưỡng dành cho ảnh mờ."""
+        return self._recognize(
+            image_path=image_path,
+            allowlist=FIELD_ALLOWLISTS.get(
+                field_name,
+                VIETNAMESE_ALLOWLIST,
+            ),
+            field_mode=True,
+        )
+
+    def _recognize(
+        self,
+        image_path: str,
+        allowlist: str,
+        field_mode: bool,
+    ) -> OCRResult:
         if not image_path or not image_path.strip():
             return OCRResult(
                 success=False,
@@ -51,29 +87,41 @@ class EasyOCREngine(BaseOCREngine):
             )
 
         try:
-            results = self.reader.readtext(
-                image_path,
-                detail=1,
-                paragraph=False,
-                decoder="beamsearch",
-                beamWidth=5,
-                batch_size=1,
-                workers=0,
-                allowlist=VIETNAMESE_ALLOWLIST,
-                min_size=5,
-                text_threshold=0.55,
-                low_text=0.30,
-                link_threshold=0.30,
-                canvas_size=2560,
-                mag_ratio=1.5,
-                slope_ths=0.15,
-                ycenter_ths=0.50,
-                height_ths=0.50,
-                width_ths=0.80,
-                add_margin=0.08,
-                contrast_ths=0.05,
-                adjust_contrast=0.70,
-            )
+            # Torch mới cảnh báo pin_memory ở mỗi lần EasyOCR chạy CPU.
+            # Đây không phải lỗi và gây ngập log khi OCR nhiều field.
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=(
+                        ".*pin_memory.*no accelerator.*"
+                    ),
+                    category=UserWarning,
+                )
+                results = self.reader.readtext(
+                    image_path,
+                    detail=1,
+                    paragraph=False,
+                    # Beam search của EasyOCR có thể phát sinh overflow
+                    # trên các dòng dài. Greedy ổn định hơn và các nguồn
+                    # ảnh khác nhau được hợp nhất ở tầng field/fuser.
+                    decoder="greedy",
+                    batch_size=1,
+                    workers=0,
+                    allowlist=allowlist,
+                    min_size=3 if field_mode else 5,
+                    text_threshold=0.35 if field_mode else 0.55,
+                    low_text=0.15 if field_mode else 0.30,
+                    link_threshold=0.20 if field_mode else 0.30,
+                    canvas_size=3200 if field_mode else 2560,
+                    mag_ratio=1.8 if field_mode else 1.5,
+                    slope_ths=0.20 if field_mode else 0.15,
+                    ycenter_ths=0.55 if field_mode else 0.50,
+                    height_ths=0.60 if field_mode else 0.50,
+                    width_ths=1.00 if field_mode else 0.80,
+                    add_margin=0.12 if field_mode else 0.08,
+                    contrast_ths=0.10 if field_mode else 0.05,
+                    adjust_contrast=0.65 if field_mode else 0.70,
+                )
         except Exception as error:
             return OCRResult(
                 success=False,

@@ -103,10 +103,10 @@ def main() -> None:
 
     if failed_count > 0:
         raise AssertionError(
-            f"CÃ³ {failed_count} trÆ°á»ng há»£p kiá»ƒm thá»­ chÆ°a Ä‘áº¡t."
+            f"Có {failed_count} trường hợp kiểm thử chưa đạt."
         )
 
-    print("Táº¥t cáº£ test OCRTextNormalizer Ä‘á»u thÃ nh cÃ´ng.")
+    print("Tất cả test OCRTextNormalizer đều thành công.")
 
 
 if __name__ == "__main__":

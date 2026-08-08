@@ -20,6 +20,8 @@ class ContourDetector:
         min_aspect_ratio: float = 1.35,
         max_aspect_ratio: float = 2.35,
         padding: int = 55,
+        multi_card_min_area_ratio: float = 0.12,
+        multi_card_min_rectangularity: float = 0.68,
     ):
         self.max_contours = max_contours
         self.epsilon_factor = epsilon_factor
@@ -27,6 +29,8 @@ class ContourDetector:
         self.min_aspect_ratio = min_aspect_ratio
         self.max_aspect_ratio = max_aspect_ratio
         self.padding = padding
+        self.multi_card_min_area_ratio = multi_card_min_area_ratio
+        self.multi_card_min_rectangularity = multi_card_min_rectangularity
 
     def build_card_mask(self, resized_image: np.ndarray) -> np.ndarray:
         gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
@@ -55,6 +59,28 @@ class ContourDetector:
 
         return opened
 
+    def build_multi_card_mask(self, resized_image: np.ndarray) -> np.ndarray:
+        """Tạo mask hạt mịn để không nối hai thẻ đặt sát cạnh nhau.
+
+        Mask chính dùng kernel 25x25 nhằm vá viền thẻ đơn. Với ảnh có hai
+        CCCD, kernel đó có thể lấp luôn khe ở giữa và biến hai thẻ thành một
+        contour lớn. Mask này chỉ open nhẹ 3x3 để giữ nguyên đường phân cách.
+        """
+        gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        _, threshold = cv2.threshold(
+            blur,
+            0,
+            255,
+            cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+        )
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        return cv2.morphologyEx(
+            threshold,
+            cv2.MORPH_OPEN,
+            kernel,
+        )
+
     def find_contours(self, mask_image: np.ndarray) -> list[np.ndarray]:
         contours, _ = cv2.findContours(
             mask_image,
@@ -69,6 +95,206 @@ class ContourDetector:
         )
 
         return contours[: self.max_contours]
+
+    @staticmethod
+    def _overlap_over_smaller_area(
+        first: np.ndarray,
+        second: np.ndarray,
+    ) -> float:
+        first_x, first_y, first_w, first_h = cv2.boundingRect(first)
+        second_x, second_y, second_w, second_h = cv2.boundingRect(second)
+
+        intersection_width = max(
+            0,
+            min(first_x + first_w, second_x + second_w)
+            - max(first_x, second_x),
+        )
+        intersection_height = max(
+            0,
+            min(first_y + first_h, second_y + second_h)
+            - max(first_y, second_y),
+        )
+        intersection = float(intersection_width * intersection_height)
+        smaller = float(min(first_w * first_h, second_w * second_h))
+        return intersection / smaller if smaller > 0 else 0.0
+
+    def find_multiple_card_contours_from_image(
+        self,
+        resized_image: np.ndarray,
+    ) -> tuple[list[np.ndarray], np.ndarray]:
+        """Tìm từ hai vùng CCCD độc lập để chặn ảnh ghép nhiều thẻ."""
+        mask = self.build_multi_card_mask(resized_image)
+        contours, _ = cv2.findContours(
+            mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+
+        image_height, image_width = resized_image.shape[:2]
+        image_area = float(image_height * image_width)
+        target_ratio = 85.60 / 53.98
+        candidates: list[tuple[float, float, np.ndarray]] = []
+
+        for contour in contours:
+            area = float(cv2.contourArea(contour))
+            if area < image_area * self.multi_card_min_area_ratio:
+                continue
+
+            (_, _), (rect_width, rect_height), _ = cv2.minAreaRect(contour)
+            short_edge = min(rect_width, rect_height)
+            long_edge = max(rect_width, rect_height)
+            if short_edge <= 0:
+                continue
+
+            aspect_ratio = long_edge / float(short_edge)
+            if not (
+                self.min_aspect_ratio
+                <= aspect_ratio
+                <= self.max_aspect_ratio
+            ):
+                continue
+
+            rectangle_area = float(rect_width * rect_height)
+            rectangularity = area / rectangle_area if rectangle_area > 0 else 0.0
+            if rectangularity < self.multi_card_min_rectangularity:
+                continue
+
+            quadrilateral = self.contour_to_quadrilateral(
+                contour,
+                resized_image.shape,
+            )
+            candidates.append(
+                (
+                    abs(aspect_ratio - target_ratio),
+                    -area,
+                    quadrilateral,
+                )
+            )
+
+        # Ưu tiên contour có tỷ lệ gần CCCD thật. Contour bao quanh cả hai
+        # thẻ sẽ bị loại vì chồng gần như toàn bộ lên từng contour con.
+        selected: list[np.ndarray] = []
+        for _, _, candidate in sorted(candidates, key=lambda item: item[:2]):
+            if any(
+                self._overlap_over_smaller_area(candidate, chosen) >= 0.72
+                for chosen in selected
+            ):
+                continue
+            selected.append(candidate)
+
+        if len(selected) < 2:
+            tiled_cards = self.find_tiled_card_regions(resized_image)
+            if len(tiled_cards) >= 2:
+                return tiled_cards, mask
+            return selected, mask
+
+        total_area = sum(float(cv2.contourArea(item)) for item in selected)
+        if total_area < image_area * 0.35:
+            tiled_cards = self.find_tiled_card_regions(resized_image)
+            if len(tiled_cards) >= 2:
+                return tiled_cards, mask
+            return selected[:1], mask
+
+        return selected, mask
+
+    def find_tiled_card_regions(
+        self,
+        image: np.ndarray,
+    ) -> list[np.ndarray]:
+        """Fallback cho hai thẻ đặt sát nhau làm contour bị dính.
+
+        Hai CCCD dọc đặt cạnh nhau hoặc hai CCCD ngang xếp chồng tạo ra
+        một đường phân cách tối liên tục gần giữa ảnh. Ngoài độ tối, hai
+        nửa sau khi chia đều phải có tỷ lệ hình học giống thẻ ID-1; nhờ
+        vậy đường chữ/ảnh chân dung trên một thẻ đơn không bị tính nhầm.
+        """
+        height, width = image.shape[:2]
+        if height < 120 or width < 120:
+            return []
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        margin_y = max(1, int(round(height * 0.05)))
+        margin_x = max(1, int(round(width * 0.05)))
+
+        def valid_card_ratio(first_edge: int, second_edge: int) -> bool:
+            short_edge = min(first_edge, second_edge)
+            long_edge = max(first_edge, second_edge)
+            if short_edge <= 0:
+                return False
+            ratio = long_edge / float(short_edge)
+            return self.min_aspect_ratio <= ratio <= self.max_aspect_ratio
+
+        # Trường hợp hai thẻ dọc đặt cạnh nhau.
+        vertical_profile = np.mean(
+            gray[margin_y:height - margin_y, :],
+            axis=0,
+        )
+        search_left = int(round(width * 0.30))
+        search_right = int(round(width * 0.70))
+        if search_right > search_left:
+            central = vertical_profile[search_left:search_right]
+            split_x = search_left + int(np.argmin(central))
+            contrast = float(np.median(central) - vertical_profile[split_x])
+            left_width = split_x
+            right_width = width - split_x
+            if (
+                contrast >= 18.0
+                and min(left_width, right_width) >= width * 0.30
+                and valid_card_ratio(height, left_width)
+                and valid_card_ratio(height, right_width)
+            ):
+                gap = max(1, int(round(width * 0.002)))
+                return [
+                    np.array(
+                        [[[0, 0]], [[split_x - gap, 0]],
+                         [[split_x - gap, height - 1]], [[0, height - 1]]],
+                        dtype=np.float32,
+                    ),
+                    np.array(
+                        [[[split_x + gap, 0]], [[width - 1, 0]],
+                         [[width - 1, height - 1]],
+                         [[split_x + gap, height - 1]]],
+                        dtype=np.float32,
+                    ),
+                ]
+
+        # Trường hợp hai thẻ ngang xếp trên dưới.
+        horizontal_profile = np.mean(
+            gray[:, margin_x:width - margin_x],
+            axis=1,
+        )
+        search_top = int(round(height * 0.30))
+        search_bottom = int(round(height * 0.70))
+        if search_bottom > search_top:
+            central = horizontal_profile[search_top:search_bottom]
+            split_y = search_top + int(np.argmin(central))
+            contrast = float(np.median(central) - horizontal_profile[split_y])
+            top_height = split_y
+            bottom_height = height - split_y
+            if (
+                contrast >= 18.0
+                and min(top_height, bottom_height) >= height * 0.30
+                and valid_card_ratio(width, top_height)
+                and valid_card_ratio(width, bottom_height)
+            ):
+                gap = max(1, int(round(height * 0.002)))
+                return [
+                    np.array(
+                        [[[0, 0]], [[width - 1, 0]],
+                         [[width - 1, split_y - gap]],
+                         [[0, split_y - gap]]],
+                        dtype=np.float32,
+                    ),
+                    np.array(
+                        [[[0, split_y + gap]],
+                         [[width - 1, split_y + gap]],
+                         [[width - 1, height - 1]], [[0, height - 1]]],
+                        dtype=np.float32,
+                    ),
+                ]
+
+        return []
 
     def is_valid_card_contour(
         self,

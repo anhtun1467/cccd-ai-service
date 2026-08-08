@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from statistics import median
 from typing import Any
 
 from app.modules.ocr.text_normalizer import OCRTextNormalizer
@@ -86,10 +87,17 @@ class OCRLineMerger:
         current: dict[str, Any],
         row: list[dict[str, Any]],
     ) -> bool:
-        row_top = min(item["_top"] for item in row)
-        row_bottom = max(item["_bottom"] for item in row)
-        row_height = max(row_bottom - row_top, 1.0)
-        row_center_y = (row_top + row_bottom) / 2.0
+        # Dùng median thay vì biên union của cả row. Biên union có thể
+        # phình dần khi một box cao chạm hai dòng và tạo hiệu ứng "cầu",
+        # khiến dòng địa chỉ 1/2 bị trộn rồi đảo thứ tự từ trái sang phải.
+        row_center_y = float(median(
+            item["_center_y"] for item in row
+        ))
+        row_height = max(float(median(
+            item["_height"] for item in row
+        )), 1.0)
+        row_top = row_center_y - row_height / 2.0
+        row_bottom = row_center_y + row_height / 2.0
 
         pseudo_row = {
             "_top": row_top,
@@ -103,9 +111,10 @@ class OCRLineMerger:
         )
 
         center_tolerance = max(
-            row_height,
-            current["_height"],
-        ) * self.vertical_tolerance_ratio
+            min(row_height, current["_height"])
+            * self.vertical_tolerance_ratio,
+            2.0,
+        )
 
         center_close = (
             abs(current["_center_y"] - row_center_y)

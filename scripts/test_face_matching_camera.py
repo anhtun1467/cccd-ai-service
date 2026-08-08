@@ -98,7 +98,7 @@ def main() -> None:
     print("=" * 60)
     print("Model: buffalo_l")
     print("Provider: CPUExecutionProvider")
-    print("Threshold ban đầu: 0.45")
+    print("Threshold: 0.50")
     print("=" * 60)
 
     print("\nĐang khởi tạo InsightFace...")
@@ -111,7 +111,7 @@ def main() -> None:
     )
 
     matcher = CosineFaceMatcher(
-        threshold=0.45,
+        threshold=0.50,
     )
 
     print("Khởi tạo thành công.")

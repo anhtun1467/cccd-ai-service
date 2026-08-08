@@ -32,6 +32,32 @@ class CardDetector:
 
         resized, ratio = self.preprocessor.resize(image)
 
+        multiple_cards, multiple_mask = (
+            self.contour_detector.find_multiple_card_contours_from_image(
+                resized
+            )
+        )
+
+        if len(multiple_cards) >= 2:
+            if output_dir:
+                self.save_multiple_card_debug(
+                    resized,
+                    multiple_mask,
+                    multiple_cards,
+                    output_dir,
+                )
+            raise BadRequestException(
+                "Phát hiện nhiều CCCD trong cùng một ảnh",
+                data={
+                    "errorCode": "MULTIPLE_CARDS",
+                    "reason": "Phát hiện nhiều CCCD trong cùng một ảnh",
+                    "cardCount": len(multiple_cards),
+                    "suggestion": (
+                        "Vui lòng chỉ chụp một CCCD trong mỗi ảnh."
+                    ),
+                },
+            )
+
         card_contour, mask, contours = self.contour_detector.find_card_contour_from_image(
             resized
         )
@@ -50,6 +76,7 @@ class CardDetector:
             "message": "Phát hiện CCCD thành công",
             "resizeRatio": ratio,
             "geometry": geometry,
+            "cardCount": 1,
             "cardImage": warped,
             "enhancedImage": enhanced_images["final"],
             "debug": {
@@ -64,6 +91,44 @@ class CardDetector:
             self.save_debug_images(result, output_dir)
 
         return result
+
+    @staticmethod
+    def save_multiple_card_debug(
+        resized: np.ndarray,
+        mask: np.ndarray,
+        card_contours: list[np.ndarray],
+        output_dir: str,
+    ) -> None:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        overlay = resized.copy()
+        debug_contours = [
+            np.rint(contour).astype(np.int32)
+            for contour in card_contours
+        ]
+        cv2.drawContours(overlay, debug_contours, -1, (0, 0, 255), 5)
+        for index, contour in enumerate(debug_contours, start=1):
+            x, y, _, _ = cv2.boundingRect(contour)
+            cv2.putText(
+                overlay,
+                f"CCCD {index}",
+                (x, max(35, y + 30)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (0, 0, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
+        cv2.imwrite(
+            str(output_path / "detector_00_multiple_mask.jpg"),
+            mask,
+        )
+        cv2.imwrite(
+            str(output_path / "detector_00_multiple_cards.jpg"),
+            overlay,
+        )
 
     def save_debug_images(self, result: dict, output_dir: str) -> None:
         output_path = Path(output_dir)

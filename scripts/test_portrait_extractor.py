@@ -8,11 +8,11 @@ import cv2
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 
+from app.modules.face_verification.errors import FaceVerificationError
 from app.modules.face_verification.portrait_extractor import (
     CCCDPortraitExtractor,
 )
@@ -20,136 +20,70 @@ from app.modules.face_verification.portrait_extractor import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Trích xu?t chân dung t? ?nh CCCD."
+        description="Trích xuất chân dung từ ảnh mặt trước CCCD."
     )
-
+    parser.add_argument("--image", required=True, help="Đường dẫn ảnh CCCD.")
     parser.add_argument(
-        "--image",
-        type=str,
-        required=True,
-        help="Đu?ng d?n ?nh CCCD dă crop ho?c can th?ng.",
+        "--no-window",
+        action="store_true",
+        help="Không mở cửa sổ preview sau khi xử lý.",
     )
-
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-
     image_path = Path(args.image)
-
     if not image_path.is_absolute():
         image_path = ROOT_DIR / image_path
-
     image_path = image_path.resolve()
 
     if not image_path.exists():
-        raise FileNotFoundError(
-            f"Không t́m th?y ?nh: {image_path}"
-        )
+        raise FileNotFoundError(f"Không tìm thấy ảnh: {image_path}")
+    card_image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+    if card_image is None or card_image.size == 0:
+        raise ValueError(f"OpenCV không đọc được ảnh: {image_path}")
 
-    card_image = cv2.imread(str(image_path))
-
-    if card_image is None:
-        raise ValueError(
-            f"OpenCV không d?c du?c ?nh: {image_path}"
-        )
-
-    output_dir = (
-        ROOT_DIR
-        / "storage"
-        / "debug"
-        / "portrait_extraction"
-    )
-
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    output_dir = ROOT_DIR / "storage" / "debug" / "portrait_extraction"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
     print("CCCD PORTRAIT EXTRACTION")
     print("=" * 60)
     print(f"Input: {image_path}")
-    print(
-        f"Image size: "
-        f"{card_image.shape[1]}x{card_image.shape[0]}"
-    )
-    print("Provider: CPUExecutionProvider")
-    print("Model: buffalo_l")
-    print("=" * 60)
-
-    print("\nĐang kh?i t?o Portrait Extractor...")
+    print(f"Image size: {card_image.shape[1]}x{card_image.shape[0]}")
+    print("Model: buffalo_l | Provider: CPUExecutionProvider")
 
     extractor = CCCDPortraitExtractor()
+    try:
+        result = extractor.extract(card_image)
+    except FaceVerificationError as exc:
+        print(f"TỪ CHỐI [{exc.error_code}]: {exc}")
+        raise SystemExit(2) from exc
 
-    print("Đang trích xu?t ?nh chân dung...")
-
-    result = extractor.extract(card_image)
-
-    debug_image = extractor.draw_result(
-        card_image,
-        result,
-    )
-
+    debug_image = extractor.draw_result(card_image, result)
     portrait_path = output_dir / "portrait.jpg"
     debug_path = output_dir / "portrait_debug.jpg"
+    if not cv2.imwrite(str(portrait_path), result.portrait):
+        raise RuntimeError(f"Không thể lưu ảnh portrait: {portrait_path}")
+    if not cv2.imwrite(str(debug_path), debug_image):
+        raise RuntimeError(f"Không thể lưu ảnh debug: {debug_path}")
 
-    portrait_saved = cv2.imwrite(
-        str(portrait_path),
-        result.portrait,
-    )
-
-    debug_saved = cv2.imwrite(
-        str(debug_path),
-        debug_image,
-    )
-
-    if not portrait_saved:
-        raise RuntimeError(
-            f"Không th? luu ?nh portrait: {portrait_path}"
-        )
-
-    if not debug_saved:
-        raise RuntimeError(
-            f"Không th? luu ?nh debug: {debug_path}"
-        )
-
-    print()
+    print("\n" + "=" * 60)
+    print("KẾT QUẢ")
     print("=" * 60)
-    print("K?T QU?")
-    print("=" * 60)
-    print(
-        f"Method: {result.extraction_method}"
-    )
-    print(
-        f"Detection score: "
-        f"{result.detection_score:.4f}"
-    )
-    print(
-        f"Bounding box: {result.bbox}"
-    )
-    print(
-        f"Portrait size: "
-        f"{result.portrait.shape[1]}x"
-        f"{result.portrait.shape[0]}"
-    )
+    print(f"Method: {result.extraction_method}")
+    print(f"Detection score: {result.detection_score:.4f}")
+    print(f"Rotation: {result.rotation_degrees}°")
+    print(f"Bounding box: {result.bbox}")
     print(f"Portrait: {portrait_path}")
     print(f"Debug: {debug_path}")
-    print("=" * 60)
 
-    cv2.imshow(
-        "CCCD Portrait Extraction",
-        debug_image,
-    )
-
-    cv2.imshow(
-        "Extracted Portrait",
-        result.portrait,
-    )
-
-    print("\nNh?n phím b?t k? d? dóng c?a s?.")
-
+    if args.no_window:
+        return
+    cv2.imshow("CCCD Portrait Extraction", debug_image)
+    cv2.imshow("Extracted Portrait", result.portrait)
+    print("Nhấn phím bất kỳ để đóng cửa sổ.")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 

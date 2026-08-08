@@ -9,13 +9,19 @@ from typing import Any
 import cv2
 
 from app.core.config import settings
+from app.core.exceptions import BadRequestException
 from app.modules.card_detection.detector import CardDetector
 from app.modules.card_detection.image_enhancer import cccd_image_enhancer
 from app.modules.ocr.field_ocr_service import field_ocr_service
 from app.modules.ocr.line_merger import OCRLineMerger
-from app.modules.ocr.result_fuser import fuse_ocr_data, remove_accents
+from app.modules.ocr.result_fuser import (
+    estimate_layout_y_offset,
+    fuse_ocr_data,
+    remove_accents,
+)
 from app.modules.ocr.service import ocr_service
 from app.modules.ocr.validator import CCCDValidator
+from app.utils.image_validator import check_image_quality
 
 
 class OcrPipelineService:
@@ -48,11 +54,16 @@ class OcrPipelineService:
 
     ORIENTATION_RETRY_THRESHOLD = 7.0
     ORIENTATION_SELECTION_MARGIN = 1.5
+    CROP_BLUR_WARNING_THRESHOLD = 80.0
+    CROP_DARK_WARNING_THRESHOLD = 60.0
+    MINIMUM_READABLE_CORE_FIELDS = 3
 
     def __init__(self) -> None:
         self.card_detector = CardDetector()
         self.ocr_service = ocr_service
         self.field_ocr_service = field_ocr_service
+        if getattr(self.field_ocr_service, "engine", None) is None:
+            self.field_ocr_service.engine = self.ocr_service.engine
         self.validator = CCCDValidator()
 
         self.line_merger = OCRLineMerger(
@@ -120,6 +131,16 @@ class OcrPipelineService:
                     output_dir=str(debug_dir),
                 )
             )
+        except BadRequestException as error:
+            rejection = dict(error.data or {})
+            rejection.setdefault("errorCode", "CARD_DETECTION_FAILED")
+            rejection.setdefault("reason", error.message)
+            return self.build_error_response(
+                message=error.message,
+                start_time=start_time,
+                image_file=image_file,
+                rejection=rejection,
+            )
         except Exception as error:
             return self.build_error_response(
                 message=(
@@ -128,6 +149,13 @@ class OcrPipelineService:
                 ),
                 start_time=start_time,
                 image_file=image_file,
+                rejection={
+                    "errorCode": "CARD_DETECTION_FAILED",
+                    "reason": "Không phát hiện được vùng CCCD",
+                    "suggestion": (
+                        "Vui lòng đặt trọn một CCCD trong khung hình."
+                    ),
+                },
             )
 
         card_image = detection_result.get(
@@ -150,6 +178,15 @@ class OcrPipelineService:
 
         blur_info = cccd_image_enhancer.estimate_blur(
             card_image
+        )
+
+        # Laplacian thấp chỉ là cảnh báo. Ảnh đã perspective/resize thường
+        # có điểm thấp hơn ảnh gốc dù chữ vẫn còn đọc được, vì vậy quyết
+        # định từ chối được hoãn đến sau OCR và dựa thêm vào các trường lõi.
+        cropped_quality = check_image_quality(
+            card_image,
+            blur_threshold=self.CROP_BLUR_WARNING_THRESHOLD,
+            dark_threshold=self.CROP_DARK_WARNING_THRESHOLD,
         )
 
         if detector_enhanced_image is not None:
@@ -218,6 +255,22 @@ class OcrPipelineService:
             first_ocr_result=full_ocr_result,
         )
 
+        full_ocr_variant = "card"
+        if (
+            cropped_quality["is_blurry"]
+            or float(orientation_info.get("selectedScore", 0.0))
+            < self.ORIENTATION_RETRY_THRESHOLD + 3.0
+        ):
+            enhanced_ocr_result = self.run_full_card_ocr(
+                image_path=enhanced_output_path,
+            )
+            full_ocr_result, full_ocr_variant = (
+                self.select_better_full_ocr_result(
+                    card_result=full_ocr_result,
+                    enhanced_result=enhanced_ocr_result,
+                )
+            )
+
         geometry_rotation = int(
             detection_result.get("geometry", {}).get(
                 "geometryRotationDegrees",
@@ -230,9 +283,19 @@ class OcrPipelineService:
             + int(orientation_info.get("contentRotationDegrees", 0))
         ) % 360
 
+        layout_y_offset = estimate_layout_y_offset(
+            full_ocr_result.get("textBoxes", []),
+            image_size=(
+                int(card_image.shape[1]),
+                int(card_image.shape[0]),
+            ),
+        )
+        orientation_info["layoutYOffset"] = layout_y_offset
+
         field_ocr_result = self.run_field_ocr(
             card_image_path=card_output_path,
             field_output_dir=field_output_dir,
+            layout_y_offset=layout_y_offset,
         )
 
         full_card_data = self.make_json_safe(
@@ -295,11 +358,66 @@ class OcrPipelineService:
             full_card_data=full_card_data,
             field_data=field_data,
             raw_text=raw_text_for_fusion,
+            field_results=field_ocr_result.get("fieldResults", {}),
+            text_boxes=full_ocr_result.get("textBoxes", []),
+            image_size=(
+                int(card_image.shape[1]),
+                int(card_image.shape[0]),
+            ),
         )
 
         validation_result = self.validator.validate(
             merged_data
         )
+
+        readability = self.evaluate_ocr_readability(
+            merged_data=merged_data,
+            cropped_quality=cropped_quality,
+            raw_text=raw_text_for_fusion,
+        )
+
+        if not readability["isReadable"]:
+            return self.build_error_response(
+                message=(
+                    "OCR không thu được đủ thông tin cốt lõi từ vùng CCCD"
+                ),
+                start_time=start_time,
+                image_file=image_file,
+                rejection={
+                    "errorCode": "OCR_UNREADABLE_IMAGE",
+                    "reason": (
+                        "Ảnh chưa cung cấp đủ bằng chứng OCR để kết luận"
+                    ),
+                    "blurScore": cropped_quality["blur_score"],
+                    "brightnessScore": (
+                        cropped_quality["brightness_score"]
+                    ),
+                    "readableCoreFields": readability[
+                        "readableCoreFields"
+                    ],
+                    "suggestion": (
+                        "Vui lòng lấy nét vào phần số CCCD, họ tên và "
+                        "ngày sinh rồi chụp lại."
+                    ),
+                },
+                partial_result={
+                    "cccdData": merged_data,
+                    "validation": validation_result,
+                    "rawText": raw_text_for_fusion,
+                    "textBoxes": full_ocr_result.get("textBoxes", []),
+                    "mergedTextBoxes": full_ocr_result.get(
+                        "mergedTextBoxes",
+                        [],
+                    ),
+                    "fieldResults": field_ocr_result.get(
+                        "fieldResults",
+                        {},
+                    ),
+                    "fieldConfidences": self.get_field_confidences(
+                        field_ocr_result
+                    ),
+                },
+            )
 
         text_boxes = self.make_json_safe(
             full_ocr_result.get(
@@ -359,9 +477,16 @@ class OcrPipelineService:
             / f"{file_stem}.json"
         )
 
+        is_fully_valid = bool(validation_result.get("isValid"))
         response = {
-            "status": "OCR_SUCCESS",
-            "message": "OCR CCCD thành công",
+            "status": (
+                "OCR_SUCCESS" if is_fully_valid else "OCR_PARTIAL"
+            ),
+            "message": (
+                "OCR CCCD thành công"
+                if is_fully_valid
+                else "OCR hoàn tất nhưng có trường cần kiểm tra"
+            ),
             "cccdData": merged_data,
             "metadata": {
                 "engine": "EasyOCR",
@@ -369,15 +494,33 @@ class OcrPipelineService:
                 "averageConfidence": (
                     average_confidence
                 ),
-                "imageQuality": self.make_json_safe(
-                    blur_info
-                ),
+                "imageQuality": self.make_json_safe({
+                    **blur_info,
+                    "cropBlurScore": cropped_quality["blur_score"],
+                    "brightnessScore": cropped_quality[
+                        "brightness_score"
+                    ],
+                    "decision": (
+                        "REVIEW_REQUIRED"
+                        if not is_fully_valid
+                        else (
+                            "PASSED_WITH_WARNING"
+                            if not cropped_quality["is_valid"]
+                            else "PASSED"
+                        )
+                    ),
+                    "warnings": readability["warnings"],
+                    "readableCoreFields": readability[
+                        "readableCoreFields"
+                    ],
+                }),
                 "fieldConfidences": (
                     field_confidences
                 ),
                 "validation": self.make_json_safe(
                     validation_result
                 ),
+                "reviewRequired": not is_fully_valid,
                 "inputImage": str(image_file),
                 "cardImage": str(
                     card_output_path
@@ -396,6 +539,7 @@ class OcrPipelineService:
                 "orientation": self.make_json_safe(
                     orientation_info
                 ),
+                "fullCardOcrVariant": full_ocr_variant,
                 "resizeRatio": self.make_json_safe(
                     detection_result.get(
                         "resizeRatio",
@@ -456,6 +600,129 @@ class OcrPipelineService:
                     f"{error}"
                 )
             )
+
+    def score_full_ocr_result(
+        self,
+        ocr_result: dict[str, Any],
+    ) -> float:
+        """Chấm một lần OCR theo nhãn, trường lõi và confidence."""
+        score = self.calculate_orientation_score(ocr_result)
+        structured = ocr_result.get("structuredData", {})
+        if not isinstance(structured, dict):
+            structured = {}
+
+        if self.validator.is_valid_id_number(structured.get("idNumber")):
+            score += 4.0
+        if self.validator.is_valid_name(structured.get("fullName")):
+            score += 2.0
+        if self.validator.is_valid_date(structured.get("dateOfBirth")):
+            score += 2.0
+        if self.validator.is_valid_gender(structured.get("gender")):
+            score += 1.0
+        if self.validator.is_valid_nationality(
+            structured.get("nationality")
+        ):
+            score += 1.0
+
+        confidence = self.calculate_average_confidence(
+            self.make_json_safe(ocr_result.get("textBoxes", []))
+        )
+        score += confidence * 2.0
+        return round(float(score), 3)
+
+    def select_better_full_ocr_result(
+        self,
+        card_result: dict[str, Any],
+        enhanced_result: dict[str, Any],
+    ) -> tuple[dict[str, Any], str]:
+        """Chọn ảnh gốc hoặc ảnh tăng cường bằng chất lượng OCR thực tế."""
+        card_score = self.score_full_ocr_result(card_result)
+        enhanced_score = self.score_full_ocr_result(enhanced_result)
+
+        if enhanced_score > card_score + 0.75:
+            return enhanced_result, "enhanced"
+        return card_result, "card"
+
+    def evaluate_ocr_readability(
+        self,
+        merged_data: dict[str, Any],
+        cropped_quality: dict[str, Any],
+        raw_text: list[str],
+    ) -> dict[str, Any]:
+        """
+        Chỉ từ chối khi điểm ảnh kém *và* OCR không đủ trường lõi.
+
+        Cách này tránh coi ảnh hơi mờ là lỗi tuyệt đối, đồng thời không trả
+        JSON có vẻ hợp lệ khi OCR chỉ thu được vài chuỗi rời rạc.
+        """
+        field_checks = {
+            "idNumber": self.validator.is_valid_id_number(
+                merged_data.get("idNumber")
+            ),
+            "fullName": self.validator.is_valid_name(
+                merged_data.get("fullName")
+            ),
+            "dateOfBirth": self.validator.is_valid_date(
+                merged_data.get("dateOfBirth")
+            ),
+            "gender": self.validator.is_valid_gender(
+                merged_data.get("gender")
+            ),
+            "nationality": self.validator.is_valid_nationality(
+                merged_data.get("nationality")
+            ),
+        }
+        readable_fields = [
+            field_name
+            for field_name, is_valid in field_checks.items()
+            if is_valid
+        ]
+
+        has_low_image_score = bool(
+            cropped_quality.get("is_blurry")
+            or cropped_quality.get("is_too_dark")
+        )
+        minimum_fields = (
+            self.MINIMUM_READABLE_CORE_FIELDS
+            if has_low_image_score
+            else 2
+        )
+        meaningful_lines = sum(
+            bool(re.search(r"[A-Za-zÀ-ỹ0-9]{3}", str(line)))
+            for line in raw_text
+        )
+        is_readable = bool(
+            len(readable_fields) >= minimum_fields
+            and meaningful_lines >= 3
+        )
+
+        warnings: list[str] = []
+        if cropped_quality.get("is_blurry"):
+            warnings.append(
+                "Ảnh hơi mờ; kết quả đã được giữ vì OCR vẫn đọc được "
+                "các trường cốt lõi."
+            )
+        if cropped_quality.get("is_too_dark"):
+            warnings.append(
+                "Vùng CCCD thiếu sáng; nên đối chiếu lại các trường có "
+                "độ tin cậy thấp."
+            )
+        missing_fields = [
+            field_name
+            for field_name, is_valid in field_checks.items()
+            if not is_valid
+        ]
+        if missing_fields:
+            warnings.append(
+                "Chưa xác nhận được trường: " + ", ".join(missing_fields)
+            )
+
+        return {
+            "isReadable": is_readable,
+            "readableCoreFields": readable_fields,
+            "missingCoreFields": missing_fields,
+            "warnings": warnings,
+        }
 
     @staticmethod
     def calculate_orientation_score(
@@ -607,6 +874,7 @@ class OcrPipelineService:
         self,
         card_image_path: Path,
         field_output_dir: Path,
+        layout_y_offset: float = 0.0,
     ) -> dict[str, Any]:
         """
         Cắt và OCR từng field trên CCCD.
@@ -621,6 +889,7 @@ class OcrPipelineService:
                     output_dir=str(
                         field_output_dir
                     ),
+                    layout_y_offset=layout_y_offset,
                 )
             )
 
@@ -971,6 +1240,8 @@ class OcrPipelineService:
         message: str,
         start_time: float,
         image_file: Path | None = None,
+        rejection: dict[str, Any] | None = None,
+        partial_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Tạo response khi pipeline thất bại và cố gắng lưu JSON lỗi.
@@ -982,32 +1253,55 @@ class OcrPipelineService:
             3,
         )
 
+        partial = partial_result or {}
+        partial_text_boxes = self.make_json_safe(
+            partial.get("textBoxes", [])
+        )
+        partial_cccd_data = partial.get("cccdData")
+        if not isinstance(partial_cccd_data, dict):
+            partial_cccd_data = {
+                field_name: None
+                for field_name in self.FIELD_NAMES
+            }
+
         response = {
             "status": "OCR_FAILED",
             "message": message,
-            "cccdData": {
-                field_name: None
-                for field_name
-                in self.FIELD_NAMES
-            },
+            "cccdData": self.make_json_safe(partial_cccd_data),
             "metadata": {
                 "engine": "EasyOCR",
                 "processingTime": (
                     processing_time
                 ),
-                "averageConfidence": 0.0,
-                "fieldConfidences": {},
-                "validation": {
-                    "isValid": False,
-                    "errors": [message],
-                },
+                "averageConfidence": self.calculate_average_confidence(
+                    partial_text_boxes
+                ),
+                "fieldConfidences": self.make_json_safe(
+                    partial.get("fieldConfidences", {})
+                ),
+                "validation": self.make_json_safe(
+                    partial.get("validation")
+                    or {
+                        "isValid": False,
+                        "errors": [message],
+                    }
+                ),
             },
             "portrait": None,
-            "rawText": [],
-            "textBoxes": [],
-            "mergedTextBoxes": [],
-            "fieldResults": {},
+            "rawText": self.make_json_safe(partial.get("rawText", [])),
+            "textBoxes": partial_text_boxes,
+            "mergedTextBoxes": self.make_json_safe(
+                partial.get("mergedTextBoxes", [])
+            ),
+            "fieldResults": self.make_json_safe(
+                partial.get("fieldResults", {})
+            ),
         }
+
+        if rejection:
+            response["metadata"]["rejection"] = self.make_json_safe(
+                rejection
+            )
 
         if image_file is not None:
             json_output_dir = (

@@ -16,7 +16,7 @@ from app.utils.file_utils import ensure_storage_dirs
 
 def create_app() -> FastAPI:
     """
-    Kh?i t?o và c?u h́nh ?ng d?ng FastAPI.
+    Khởi tạo và cấu hình ứng dụng FastAPI.
     """
 
     ensure_storage_dirs()
@@ -26,7 +26,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         debug=settings.debug,
         description=(
-            "AI Service x? lư CCCD g?m Card Detection, "
+            "AI Service xử lý CCCD gồm Card Detection, "
             "OCR và Face Verification."
         ),
     )

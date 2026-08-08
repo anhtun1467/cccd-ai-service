@@ -54,7 +54,7 @@ def test_pipeline_fusion_data() -> None:
     )
 
     assert result["fullName"] == (
-        "NGUYEN HOANG NAM"
+        "NGUYỄN HOANG NAM"
     )
 
     assert result["dateOfBirth"] == (

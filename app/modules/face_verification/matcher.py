@@ -27,7 +27,7 @@ class CosineFaceMatcher:
 
     def __init__(
         self,
-        threshold: float = 0.45,
+        threshold: float = 0.50,
     ) -> None:
         if not -1.0 <= threshold <= 1.0:
             raise ValueError(

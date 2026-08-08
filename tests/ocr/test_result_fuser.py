@@ -37,7 +37,7 @@ def test_name_is_truncated_before_birth_label():
         ],
     )
 
-    assert result["fullName"] == "DANG THI MAY"
+    assert result["fullName"] == "ĐẶNG THỊ MAY"
 
 
 def test_origin_and_residence_from_raw_lines():
@@ -65,6 +65,27 @@ def test_origin_and_residence_from_raw_lines():
     assert sources["placeOfResidence"] == "RAW_TEXT_RECOVERY"
 
 
+def test_origin_rejoins_city_words_split_by_residence_column():
+    result, sources = fuse_ocr_data(
+        full_card_data={},
+        field_data={},
+        raw_text=[
+            "Que quan / Place of origin '",
+            (
+                "Là Hoing' Thành trú / Place of residence : "
+                "phố Bẳc Giang, Bác Giang"
+            ),
+            "Phố Vôi",
+            "Thị trấn Vôi, Lang Giang, Bắc Giang",
+        ],
+    )
+
+    assert result["placeOfOrigin"] == (
+        "Lê Lợi, Thành phố Bắc Giang, Bắc Giang"
+    )
+    assert sources["placeOfOrigin"] == "RAW_TEXT_RECOVERY"
+
+
 def test_residence_continues_after_expiry_line():
     result, sources = fuse_ocr_data(
         full_card_data={
@@ -81,7 +102,7 @@ def test_residence_continues_after_expiry_line():
     )
 
     assert result["placeOfResidence"] == (
-        "TDP Dau Lang, Thị trấn Thanh Lang, Binh Xuyen, Vinh Phuc"
+        "TDP Đầu Làng, Thị trấn Thanh Lãng, Bình Xuyên, Vĩnh Phúc"
     )
     assert result["dateOfExpiry"] == "12/09/2030"
     assert sources["placeOfResidence"] == "RAW_TEXT_RECOVERY"
@@ -441,3 +462,276 @@ def test_removes_onigin_and_dato_atorpiry_noise_from_real_card():
     assert result["placeOfResidence"] == (
         "Phú Vân Nam, Hải Châu, Hải Hậu, Nam Định"
     )
+
+
+def test_recovers_id_name_old_birth_label_and_house_number():
+    result, sources = fuse_ocr_data(
+        full_card_data={
+            "idNumber": "030099000728",
+            "fullName": "BÙL XUÂN THÌN",
+            "placeOfResidence": (
+                "16163 Mạc Thị Bưởi, Thành Phố Hải Dương, Hải Dương"
+            ),
+        },
+        field_data={
+            "placeOfOrigin": "Noi thuong tru: 16/63 Mac Thị Bu",
+        },
+        raw_text=[
+            "Số: 030099000728",
+            "Ho va ten: BÙl XUÂN THÌN",
+            "Ngày, tháng, nắm sinh: 15/08/2000",
+            "Gioi tinh: Nam Quoc tich: Việt Nam",
+            "Que quan: Thành Phố Hải Dương",
+            "Hải Dương",
+            "Noi thuong tru: 16163 Mạc Thị Bưởi",
+            "Thành Phố Hải Dương, Hải Dương",
+            "Có giá trị đến: 27/06/2024",
+        ],
+    )
+
+    assert result["fullName"] == "BÙI XUÂN THÌN"
+    assert result["dateOfBirth"] == "15/08/2000"
+    assert result["placeOfResidence"] == (
+        "16/63 Mạc Thị Bưởi, Thành phố Hải Dương, Hải Dương"
+    )
+    assert sources["dateOfBirth"] == "RAW_TEXT_RECOVERY"
+
+
+def test_recovers_noisy_raw_id_and_legitimate_quoc_in_name():
+    result, sources = fuse_ocr_data(
+        full_card_data={"gender": "Nam", "nationality": "Nam Việt Nam"},
+        field_data={},
+        raw_text=[
+            "Só / No: 031204005637 5 5 9",
+            "Ho va ten / Ful name:",
+            "NGUYỄN QUÓC VIỆT",
+            "Ngay sinh / Date of birth: 06/06/2004",
+        ],
+    )
+
+    assert result["idNumber"] == "031204005637"
+    assert result["fullName"] == "NGUYỄN QUỐC VIỆT"
+    assert sources["idNumber"] == "RAW_TEXT_RECOVERY"
+
+
+def test_interleaved_origin_and_residence_columns_are_separated():
+    result, _ = fuse_ocr_data(
+        full_card_data={},
+        field_data={
+            "placeOfOrigin": "Jôi Binh, Ứng Hòa, Hà Nội",
+            "placeOfResidence": "Thôn Triêu Khúc, Đội Binh, Ứng Hòa, Hà Nội",
+        },
+        raw_text=[
+            "Que quan / Place 0f ongin:",
+            "Đôi Binh, Noi thuong tru Ứng sc Hòa, Of residenco: 0 Hà Nội",
+            "Thôn Triều Khúc",
+            "Co qla gn",
+            "Dalo aorhuy 05/11/2034",
+            "Đội Binh, Ứng Hòa, Hà Nội",
+        ],
+    )
+
+    assert result["placeOfOrigin"] == "Đội Bình, Ứng Hòa, Hà Nội"
+    assert result["placeOfResidence"] == (
+        "Thôn Triều Khúc, Đội Bình, Ứng Hòa, Hà Nội"
+    )
+
+
+def test_noisy_nationality_and_truncated_province_are_recovered():
+    result, _ = fuse_ocr_data(
+        full_card_data={
+            "placeOfResidence": "Thanh Minh, Thị xã Phú Thọ, Phú Th",
+        },
+        field_data={
+            "nationality": "Y vIel Iamn",
+            "placeOfResidence": (
+                "Place of resid, Thanh Minh, Thị xf Phú Thọ, Phú Thọ"
+            ),
+        },
+        raw_text=[
+            "Noi thuong tru / Place of residence",
+            "Thanh Minh, Thị xã Phú Thọ, Phú Th",
+        ],
+    )
+
+    assert result["nationality"] == "Việt Nam"
+    assert result["placeOfResidence"] == (
+        "Thanh Minh, Thị xã Phú Thọ, Phú Thọ"
+    )
+
+
+def test_short_residence_label_and_expiry_noise_are_removed():
+    result, _ = fuse_ocr_data(
+        full_card_data={},
+        field_data={},
+        raw_text=[
+            "Que quan / Place of origin:",
+            "Tiến Thủy, Quỳnh Lưu; 0 Nghệ An",
+            "Noi thuong tru / Place of resi Khối 15",
+            "Co gia ( tri đen: 03/03/2031",
+            "Hà Huy Tâp; Thành phố Vinh; Nghệ An",
+            "Datu 0 erpiry",
+        ],
+    )
+
+    assert result["placeOfOrigin"] == "Tiến Thủy, Quỳnh Lưu, Nghệ An"
+    assert result["placeOfResidence"] == (
+        "Khối 15, Hà Huy Tập, Thành phố Vinh, Nghệ An"
+    )
+
+
+def test_malformed_name_label_does_not_replace_the_real_name() -> None:
+    result, _ = fuse_ocr_data(
+        full_card_data={"fullName": "HỒ VAÀ"},
+        field_data={"fullName": "HỒ NGỌC HÀ LINH"},
+        raw_text=[
+            "Ho vaà tẻn / Full name:",
+            "HỒ NGOC HÀ LINH",
+            "Ngay sinh / Date of birth: 19/07/2004",
+            "Gioi tinh / Sex: Nữ",
+        ],
+    )
+
+    assert result["fullName"] == "HỒ NGỌC HÀ LINH"
+
+
+def test_id_conflict_uses_birth_year_and_gender_structure() -> None:
+    result, sources = fuse_ocr_data(
+        full_card_data={
+            "idNumber": "026205010395",
+            "dateOfBirth": "12/09/2005",
+            "gender": "Nam",
+        },
+        field_data={"idNumber": "026905046972"},
+        raw_text=[
+            "Số / No: 026205010395",
+            "Ngày sinh / Date of birth: 12/09/2005",
+            "Giới tính / Sex: Nam",
+        ],
+    )
+
+    assert result["idNumber"] == "026205010395"
+    assert sources["idNumber"] == "FULL_CARD_OCR"
+
+
+def test_birth_date_can_follow_a_split_english_label() -> None:
+    result, sources = fuse_ocr_data(
+        full_card_data={},
+        field_data={},
+        raw_text=["of birth:", "12/09/2005"],
+    )
+
+    assert result["dateOfBirth"] == "12/09/2005"
+    assert sources["dateOfBirth"] == "RAW_TEXT_RECOVERY"
+
+
+def test_expiry_day_is_reconciled_at_cccd_age_milestone() -> None:
+    result, _ = fuse_ocr_data(
+        full_card_data={
+            "dateOfBirth": "24/03/1995",
+            "dateOfExpiry": "04/03/2035",
+        },
+        field_data={"dateOfExpiry": "04/03/2035"},
+        raw_text=[
+            "Ngày sinh / Date of birth: 24/03/1995",
+            "Có giá trị đến: 04/03/2035",
+        ],
+    )
+
+    assert result["dateOfExpiry"] == "24/03/2035"
+
+
+def test_clean_field_address_beats_raw_text_with_numeric_noise() -> None:
+    result, sources = fuse_ocr_data(
+        full_card_data={
+            "placeOfResidence": (
+                "11 Ngách 35/72, giá 49424103/2035 Nguyễn Trãi, "
+                "Nhân Chính, Thanhgacân, Hà Nc"
+            ),
+        },
+        field_data={
+            "placeOfResidence": (
+                "1 1, Ngách 35/72, Nguyễn Trãi, Nhân Chính, "
+                "Thanh Xuân, Hà Nội"
+            ),
+        },
+        raw_text=[
+            "Nơi thường trú / Place of residence: 1 1 Ngách 35/72",
+            (
+                "giá 49424103/2035 Nguyễn Trãi, Nhân Chính, "
+                "Thanhgacân, Hà Nc"
+            ),
+        ],
+    )
+
+    assert result["placeOfResidence"] == (
+        "11 Ngách 35/72, Nguyễn Trãi, Nhân Chính, Thanh Xuân, Hà Nội"
+    )
+    assert sources["placeOfResidence"] == "FIELD_OCR"
+
+
+def test_blurry_real_card_4375_recovers_core_fields_and_addresses() -> None:
+    raw_text = [
+        "cowgiida XA Hoi CHU WGKAvET u G",
+        "DeVe2 LbEnE",
+        "ECCuLA7",
+        "CÁN CUOC CONG DÂN",
+        "GitaunUontt Cad",
+        "saime 027191001864",
+        "Mo ralon IFaotY",
+        "DUONG THI HUONG HIeP",
+        "NGy Mnn ( (neu / bvir 17/101801",
+        "Gioenh/ 505 NÔ' Ouetkhl Nnou y, Vie Naii",
+        "ghaukhe in' 0 7 Que Khe Thl v8 Tu San Buc Mlinh",
+        "Rolnuorgtu, Aaco cfrusutyoe Thinh Lang",
+        "1id2o1",
+        "Đinh Bena Thixả Tử Son Bac Minh",
+    ]
+
+    result, sources = fuse_ocr_data(
+        full_card_data={},
+        field_data={
+            "fullName": "DƯƠNG THỊ HƯƠNG HIỆP",
+            "placeOfOrigin": "Chau Khe, Thi xa Tu Son, Bac Ninh",
+            "placeOfResidence": (
+                "Thinh Lang, Dinh Bang, Thi xa Tu Son, Bac Ninh"
+            ),
+            "dateOfExpiry": "17/10/2031",
+        },
+        raw_text=raw_text,
+    )
+
+    assert result == {
+        "idNumber": "027191001864",
+        "fullName": "DƯƠNG THỊ HƯƠNG HIỆP",
+        "dateOfBirth": "17/10/1991",
+        "gender": "Nữ",
+        "nationality": "Việt Nam",
+        "placeOfOrigin": "Châu Khê, Thị xã Từ Sơn, Bắc Ninh",
+        "placeOfResidence": (
+            "Thịnh Lang, Đình Bảng, Thị xã Từ Sơn, Bắc Ninh"
+        ),
+        "dateOfExpiry": "17/10/2031",
+    }
+    assert sources["dateOfBirth"].startswith("ID_STRUCTURE_RECOVERY")
+    assert sources["gender"] == "ID_STRUCTURE_RECOVERY"
+
+
+def test_blurry_real_card_4375_is_readable_from_raw_core_evidence() -> None:
+    result, _ = fuse_ocr_data(
+        full_card_data={},
+        field_data={},
+        raw_text=[
+            "saime 027191001864",
+            "Mo ralon IFaotY",
+            "DUONG THI HUONG HIeP",
+            "NGy Mnn ( (neu / bvir 17/101801",
+            "Gioenh/ 505 NÔ' Ouetkhl Nnou y, Vie Naii",
+        ],
+    )
+
+    assert result["idNumber"] == "027191001864"
+    assert result["fullName"] == "DƯƠNG THỊ HUONG HIỆP"
+    assert result["dateOfBirth"] == "17/10/1991"
+    assert result["gender"] == "Nữ"
+    assert result["nationality"] == "Việt Nam"

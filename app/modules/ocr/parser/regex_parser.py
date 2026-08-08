@@ -48,6 +48,7 @@ class CCCDRegexParser:
         r"(?:"
         r"ngay\s*sinh"
         r"|date\s*of\s*birth"
+        r"|\bof\s*birth"
         r")",
         re.IGNORECASE,
     )
@@ -190,15 +191,27 @@ class CCCDRegexParser:
             if not match:
                 continue
 
-            candidates = [
-                line[:match.start()],
-                line[match.end():],
-            ]
+            # Dữ liệu thường nằm sau nhãn hoặc ở dòng kế tiếp. Phần trước
+            # nhãn chỉ là phương án cuối vì OCR có thể đọc sai nhãn Việt
+            # thành "Ho vaa ten / Full name" và biến nó thành họ tên giả.
+            candidates = [line[match.end():]]
+            if index + 1 < len(lines):
+                candidates.append(lines[index + 1])
+            if index + 2 < len(lines):
+                candidates.append(lines[index + 2])
+
+            prefix = line[:match.start()]
+            plain_prefix = OCRTextNormalizer._remove_accents(
+                prefix
+            ).lower()
+            if not re.search(
+                r"\bho\s*va{1,2}\s*te?n\b",
+                plain_prefix,
+            ):
+                candidates.append(prefix)
 
             if index > 0:
                 candidates.append(lines[index - 1])
-            if index + 1 < len(lines):
-                candidates.append(lines[index + 1])
 
             for candidate in candidates:
                 value = self.clean_full_name(candidate)

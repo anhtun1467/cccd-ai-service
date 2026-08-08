@@ -12,11 +12,11 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.core.face_verification_provider import (
     FaceVerificationProvider,
-    provider,
 )
 
 
 def main() -> None:
+    provider = FaceVerificationProvider.instance()
     provider_again = FaceVerificationProvider.instance()
 
     print("=" * 64)
@@ -26,6 +26,7 @@ def main() -> None:
     print(f"Provider ID 1:           {id(provider)}")
     print(f"Provider ID 2:           {id(provider_again)}")
     print(f"Same provider:           {provider is provider_again}")
+    print(f"Model loaded initially:  {provider._service is not None}")
 
     print()
 

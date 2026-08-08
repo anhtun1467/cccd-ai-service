@@ -15,6 +15,8 @@ AI-powered Vietnamese Citizen Identity Card Recognition and Face Verification Sy
 - ✅ Data Validation
 - ✅ RESTful API
 - ✅ Swagger Documentation
+- ✅ InsightFace 1:1 Face Verification
+- ✅ Face Quality and Multi-face Validation
 
 ---
 
@@ -26,6 +28,14 @@ AI-powered Vietnamese Citizen Identity Card Recognition and Face Verification Sy
 - EasyOCR
 - NumPy
 - Pydantic
+- InsightFace `buffalo_l` / ArcFace
+- ONNX Runtime CPU
+
+Windows/Python 3.11 sử dụng `insightface==1.0.1`. Cài riêng phần Face bằng:
+
+```powershell
+python -m pip install --only-binary=:all: -r requirements-face.txt
+```
 
 ---
 
@@ -90,6 +100,42 @@ JSON Response
 
 ---
 
+## Face Verification Pipeline
+
+```text
+Front CCCD Image -> Portrait Detection -> ArcFace 512-D Embedding
+Webcam Selfie    -> Exactly One Face -> Quality Check -> ArcFace Embedding
+                                        |
+                                        v
+                          Cosine Similarity
+                    MATCH / REVIEW / NOT_MATCH
+```
+
+Thresholds:
+
+- `MATCH`: similarity `>= 0.50`
+- `REVIEW`: similarity from `0.40` to `< 0.50`
+- `NOT_MATCH`: similarity `< 0.40`
+
+API:
+
+```text
+POST /api/face-verification/verify
+```
+
+Direct Logitech C922 test:
+
+```powershell
+python scripts\verify_cccd_with_camera.py `
+  --image tests\card_detection\sample_cccd.jpg `
+  --camera 0
+```
+
+Set `FACE_SAVE_DEBUG=True` only while debugging. The default is `False`
+because CCCD and selfie images contain personal data.
+
+---
+
 ## Current Progress
 
 - Card Detection ✅
@@ -97,6 +143,10 @@ JSON Response
 - Parser ✅
 - Validator ✅
 - REST API ✅
+- Face Detection ✅
+- Face Verification 1:1 ✅
+- Passive image quality checks ✅
+- Liveness / anti-spoofing ⏳
 
 ---
 

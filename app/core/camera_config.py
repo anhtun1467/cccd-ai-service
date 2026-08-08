@@ -7,31 +7,7 @@ import cv2
 
 @dataclass(frozen=True)
 class CameraConfig:
-    """
-    C?u h́nh k?t n?i camera b?ng OpenCV.
-
-    Attributes:
-        device_index:
-            Ch? s? camera trên Windows.
-
-        width:
-            Chi?u r?ng h́nh ?nh mong mu?n.
-
-        height:
-            Chi?u cao h́nh ?nh mong mu?n.
-
-        fps:
-            S? khung h́nh m?i giây mong mu?n.
-
-        backend:
-            Backend OpenCV s? d?ng d? m? camera.
-
-        fourcc:
-            Chu?n mă hóa video.
-
-        warmup_frames:
-            S? frame b? qua lúc camera m?i kh?i d?ng.
-    """
+    """Cấu hình camera OpenCV trên Windows."""
 
     device_index: int = 0
     width: int = 1280
@@ -41,13 +17,17 @@ class CameraConfig:
     fourcc: str = "MJPG"
     warmup_frames: int = 15
 
+    def __post_init__(self) -> None:
+        if self.device_index < 0:
+            raise ValueError("device_index không được âm.")
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("Kích thước camera phải lớn hơn 0.")
+        if self.fps <= 0:
+            raise ValueError("FPS phải lớn hơn 0.")
+        if len(self.fourcc) != 4:
+            raise ValueError("fourcc phải có đúng 4 ký tự.")
+        if self.warmup_frames < 0:
+            raise ValueError("warmup_frames không được âm.")
 
-C922_CAMERA_CONFIG = CameraConfig(
-    device_index=0,
-    width=1280,
-    height=720,
-    fps=30,
-    backend=cv2.CAP_DSHOW,
-    fourcc="MJPG",
-    warmup_frames=15,
-)
+
+C922_CAMERA_CONFIG = CameraConfig()

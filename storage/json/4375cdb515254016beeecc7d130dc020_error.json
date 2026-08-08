@@ -1,0 +1,44 @@
+{
+    "status": "OCR_FAILED",
+    "message": "OCR không thu được đủ thông tin cốt lõi từ vùng CCCD",
+    "cccdData": {
+        "idNumber": null,
+        "fullName": null,
+        "dateOfBirth": null,
+        "gender": null,
+        "nationality": null,
+        "placeOfOrigin": null,
+        "placeOfResidence": null,
+        "dateOfExpiry": null
+    },
+    "metadata": {
+        "engine": "EasyOCR",
+        "processingTime": 27.858,
+        "averageConfidence": 0.0,
+        "fieldConfidences": {},
+        "validation": {
+            "isValid": false,
+            "errors": [
+                "OCR không thu được đủ thông tin cốt lõi từ vùng CCCD"
+            ]
+        },
+        "rejection": {
+            "errorCode": "OCR_UNREADABLE_IMAGE",
+            "reason": "Ảnh chưa cung cấp đủ bằng chứng OCR để kết luận",
+            "blurScore": 21.78,
+            "brightnessScore": 190.64,
+            "readableCoreFields": [
+                "idNumber",
+                "fullName"
+            ],
+            "suggestion": "Vui lòng lấy nét vào phần số CCCD, họ tên và ngày sinh rồi chụp lại."
+        },
+        "inputImage": "storage\\uploads\\4375cdb515254016beeecc7d130dc020.jpg",
+        "jsonOutput": "storage\\json\\4375cdb515254016beeecc7d130dc020_error.json"
+    },
+    "portrait": null,
+    "rawText": [],
+    "textBoxes": [],
+    "mergedTextBoxes": [],
+    "fieldResults": {}
+}

@@ -82,3 +82,24 @@ def test_rotated_contour_ratio_is_orientation_independent() -> None:
         contour,
         image_shape=(700, 480, 3),
     )
+
+
+def test_two_portrait_cards_with_shared_seam_are_detected() -> None:
+    detector = ContourDetector()
+    image = np.full((700, 960, 3), 205, dtype=np.uint8)
+
+    # Hai thẻ dọc đặt sát nhau; morphology lớn có thể nối chúng thành
+    # một contour, nên fallback dựa trên đường phân cách phải bắt được.
+    cv2.line(image, (494, 0), (494, 699), (35, 35, 35), 7)
+    regions = detector.find_tiled_card_regions(image)
+
+    assert len(regions) == 2
+    assert all(region.shape == (4, 1, 2) for region in regions)
+
+
+def test_single_landscape_card_is_not_reported_as_two_cards() -> None:
+    detector = ContourDetector()
+    image = np.full((630, 1000, 3), 205, dtype=np.uint8)
+    cv2.rectangle(image, (20, 180), (260, 520), (80, 80, 80), 3)
+
+    assert detector.find_tiled_card_regions(image) == []
