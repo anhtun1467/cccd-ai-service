@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     face_save_debug: bool = False
     face_debug_dir: str = "storage/debug/face_verification_api"
 
+    # Phiên nối kết quả OCR với Face Verification. Client chỉ giữ một
+    # session id ngẫu nhiên, không được nhận hoặc tự gửi đường dẫn ảnh CCCD.
+    face_session_dir: str = "storage/face_sessions"
+    face_session_ttl_seconds: int = 1800
+    face_session_max_attempts: int = 5
+    face_session_expired_retention_seconds: int = 86400
+    face_session_lease_timeout_seconds: int = 300
+
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",

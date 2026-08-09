@@ -1,7 +1,14 @@
 import cv2
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from pathlib import Path
+from starlette.concurrency import run_in_threadpool
 
+from app.core.logger import logger
 from app.schemas.response import ApiResponse
+from app.services.face_session_store import (
+    FaceSessionError,
+    face_session_store,
+)
 from app.services.ocr_pipeline import ocr_pipeline_service
 from app.utils.file_utils import save_upload_file
 
@@ -51,7 +58,12 @@ async def ocr_cccd(file: UploadFile = File(...)) -> ApiResponse:
     # ==========================================
 
     # 5. Vượt qua kiểm duyệt -> Đưa vào luồng xử lý OCR AI
-    result = ocr_pipeline_service.process_cccd_image(image_path)
+    # OCR là tác vụ CPU-bound; chạy ngoài event loop để trang camera/API
+    # vẫn phản hồi được trong lúc EasyOCR đang xử lý.
+    result = await run_in_threadpool(
+        ocr_pipeline_service.process_cccd_image,
+        image_path,
+    )
 
     if result.get("status") == "OCR_FAILED":
         metadata = result.get("metadata", {})
@@ -78,8 +90,31 @@ async def ocr_cccd(file: UploadFile = File(...)) -> ApiResponse:
             },
         )
 
+    # Tạo phiên server-side liên kết tới cardImage/portrait vừa được OCR tạo.
+    # Client chỉ nhận session id và không phải upload lại CCCD ở bước Face.
+    try:
+        face_session = face_session_store.create_from_ocr_result(
+            result,
+            ocr_request_id=Path(image_path).stem,
+        )
+        result["face_session"] = face_session.to_public_dict()
+    except FaceSessionError as exc:
+        logger.exception(
+            "Cannot create Face session from OCR | code=%s",
+            exc.error_code,
+        )
+        result["face_session"] = {
+            "can_verify": False,
+            "error_code": exc.error_code,
+            "message": str(exc),
+        }
+
     return ApiResponse(
         success=True,
-        message="Nhận ảnh CCCD thành công",
+        message=(
+            "OCR CCCD hoàn tất và đã tạo phiên đối chiếu khuôn mặt"
+            if result["face_session"].get("can_verify")
+            else "OCR CCCD hoàn tất nhưng chưa tạo được phiên khuôn mặt"
+        ),
         data=result,
     )

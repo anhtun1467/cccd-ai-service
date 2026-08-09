@@ -17,6 +17,8 @@ AI-powered Vietnamese Citizen Identity Card Recognition and Face Verification Sy
 - ✅ Swagger Documentation
 - ✅ InsightFace 1:1 Face Verification
 - ✅ Face Quality and Multi-face Validation
+- ✅ Reuse OCR Session (không upload lại CCCD ở bước Face)
+- ✅ Browser Camera + Selfie Upload UI
 
 ---
 
@@ -30,12 +32,6 @@ AI-powered Vietnamese Citizen Identity Card Recognition and Face Verification Sy
 - Pydantic
 - InsightFace `buffalo_l` / ArcFace
 - ONNX Runtime CPU
-
-Windows/Python 3.11 sử dụng `insightface==1.0.1`. Cài riêng phần Face bằng:
-
-```powershell
-python -m pip install --only-binary=:all: -r requirements-face.txt
-```
 
 ---
 
@@ -65,6 +61,17 @@ Swagger
 ```
 http://localhost:8000/docs
 ```
+
+Giao diện OCR + camera/upload (mở trực tiếp, không dùng Swagger):
+
+```text
+http://127.0.0.1:8000/
+http://127.0.0.1:8000/face-verification
+http://127.0.0.1:8000/camera
+```
+
+Địa chỉ gốc `/` và đường dẫn ngắn `/camera` đều tự chuyển tới giao diện có
+nút **MỞ CAMERA NGAY**. Trong Swagger cũng có liên kết nổi bật ở phần mô tả.
 
 ---
 
@@ -100,15 +107,21 @@ JSON Response
 
 ---
 
-## Face Verification Pipeline
+## Integrated OCR -> Face Verification Pipeline
 
 ```text
-Front CCCD Image -> Portrait Detection -> ArcFace 512-D Embedding
-Webcam Selfie    -> Exactly One Face -> Quality Check -> ArcFace Embedding
-                                        |
-                                        v
-                          Cosine Similarity
-                    MATCH / REVIEW / NOT_MATCH
+POST /ocr/cccd
+    -> Card Detection + OCR
+    -> cardImage + portrait được giữ ở server
+    -> face_session_id (TTL 30 phút, tối đa 5 lần thử)
+
+Camera hoặc selfie upload + face_session_id
+    -> POST /api/face-verification/verify-from-ocr
+    -> ưu tiên portrait của OCR
+    -> fallback cardImage đã làm phẳng
+    -> đúng một khuôn mặt + quality check
+    -> ArcFace 512-D + cosine similarity
+    -> MATCH / REVIEW / NOT_MATCH
 ```
 
 Thresholds:
@@ -120,8 +133,21 @@ Thresholds:
 API:
 
 ```text
-POST /api/face-verification/verify
+POST   /ocr/cccd
+POST   /api/face-verification/verify-from-ocr
+GET    /api/face-verification/sessions/{session_id}
+DELETE /api/face-verification/sessions/{session_id}
 ```
+
+Trang camera/upload tích hợp:
+
+```text
+http://localhost:8000/face-verification
+```
+
+`POST /api/face-verification/verify` vẫn được giữ để tương thích mã cũ,
+nhưng endpoint mới không nhận `card_image`; nó chỉ nhận `session_id`,
+`selfie_image` và `capture_source` (`camera` hoặc `upload`).
 
 Direct Logitech C922 test:
 
@@ -133,6 +159,15 @@ python scripts\verify_cccd_with_camera.py `
 
 Set `FACE_SAVE_DEBUG=True` only while debugging. The default is `False`
 because CCCD and selfie images contain personal data.
+
+Session settings in `.env` (optional):
+
+```dotenv
+FACE_SESSION_TTL_SECONDS=1800
+FACE_SESSION_MAX_ATTEMPTS=5
+FACE_SESSION_EXPIRED_RETENTION_SECONDS=86400
+FACE_SESSION_LEASE_TIMEOUT_SECONDS=300
+```
 
 ---
 

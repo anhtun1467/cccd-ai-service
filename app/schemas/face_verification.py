@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -7,6 +8,14 @@ from pydantic import BaseModel, Field
 
 VerificationStatus = Literal["match", "review", "not_match"]
 QualityStatus = Literal["pass", "warning", "fail"]
+CaptureSource = Literal["camera", "upload"]
+FaceSessionStatus = Literal[
+    "active",
+    "verified",
+    "exhausted",
+    "expired",
+    "cancelled",
+]
 
 
 class FaceQualityResponse(BaseModel):
@@ -57,6 +66,38 @@ class FaceVerificationResponse(BaseModel):
     )
     cccd_quality: FaceQualityResponse
     webcam_quality: FaceQualityResponse
+    reference_source: str | None = Field(
+        default=None,
+        description=(
+            "Nguồn ảnh tham chiếu: CCCD upload trực tiếp hoặc ảnh do OCR tạo."
+        ),
+    )
+
+
+class FaceSessionResponse(BaseModel):
+    """Trạng thái công khai của phiên nối OCR với Face Verification."""
+
+    session_id: str
+    ocr_request_id: str
+    status: FaceSessionStatus
+    created_at: datetime
+    expires_at: datetime
+    max_attempts: int = Field(gt=0)
+    attempts_used: int = Field(ge=0)
+    remaining_attempts: int = Field(ge=0)
+    can_verify: bool
+    verify_endpoint: str
+    last_verification_status: str | None = None
+    last_error_code: str | None = None
+    last_capture_source: CaptureSource | None = None
+
+
+class FaceVerificationFromOcrResponse(FaceVerificationResponse):
+    """Kết quả Face dùng lại ảnh CCCD từ một phiên OCR."""
+
+    ocr_session_id: str
+    capture_source: CaptureSource
+    session: FaceSessionResponse
 
 
 class FaceVerificationErrorResponse(BaseModel):

@@ -90,6 +90,20 @@ class FakeEmbedder:
         return self.webcam_faces[0] if self.webcam_faces else None
 
 
+class SequentialFakeEmbedder:
+    model_name = "buffalo_l-test"
+
+    def __init__(self, batches: list[list[FaceEmbeddingResult]]) -> None:
+        self.batches = list(batches)
+
+    def extract(self, image: np.ndarray) -> list[FaceEmbeddingResult]:
+        return self.batches.pop(0) if self.batches else []
+
+    def extract_single(self, image: np.ndarray) -> FaceEmbeddingResult | None:
+        faces = self.extract(image)
+        return faces[0] if faces else None
+
+
 class FakeQualityEvaluator:
     def __init__(
         self,
@@ -259,6 +273,45 @@ class FaceVerificationServiceTest(unittest.TestCase):
                 self.card_image,
                 np.zeros((720, 1280), dtype=np.uint8),
             )
+
+    def test_prepared_ocr_portrait_skips_card_extractor(self) -> None:
+        webcam_face = make_face(
+            self.base_embedding,
+            bbox=(420, 160, 820, 650),
+            score=0.91,
+        )
+        embedder = SequentialFakeEmbedder(
+            [[self.card_face], [webcam_face]]
+        )
+        service = FaceVerificationService(
+            portrait_extractor=FakePortraitExtractor(self.card_face),
+            embedder=embedder,
+            quality_evaluator=FakeQualityEvaluator(),
+            match_threshold=0.50,
+            review_threshold=0.40,
+        )
+
+        output = service.verify_prepared_portrait(
+            np.zeros((320, 250, 3), dtype=np.uint8),
+            self.webcam_image,
+        )
+
+        self.assertEqual(output.result.status, "match")
+        self.assertEqual(output.result.portrait_method, "ocr_portrait_crop")
+        self.assertEqual(output.result.cccd_face_count, 1)
+
+    def test_prepared_ocr_portrait_without_face_is_rejected(self) -> None:
+        service = FaceVerificationService(
+            portrait_extractor=FakePortraitExtractor(self.card_face),
+            embedder=SequentialFakeEmbedder([[]]),
+            quality_evaluator=FakeQualityEvaluator(),
+        )
+        with self.assertRaises(FaceVerificationError) as context:
+            service.verify_prepared_portrait(
+                np.zeros((320, 250, 3), dtype=np.uint8),
+                self.webcam_image,
+            )
+        self.assertEqual(context.exception.error_code, "CCCD_FACE_NOT_FOUND")
 
 
 if __name__ == "__main__":

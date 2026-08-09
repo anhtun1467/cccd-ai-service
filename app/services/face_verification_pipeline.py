@@ -14,6 +14,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.core.config import settings
 from app.core.face_verification_provider import FaceVerificationProvider
+from app.modules.face_verification.errors import FaceVerificationError
 from app.modules.face_verification.verification_service import (
     FaceVerificationOutput,
     FaceVerificationResult,
@@ -24,6 +25,7 @@ from app.modules.face_verification.verification_service import (
 class FaceVerificationPipelineOutput:
     verification: FaceVerificationResult
     request_id: str
+    reference_source: str = "uploaded_card"
     card_image_path: str | None = None
     webcam_image_path: str | None = None
     portrait_image_path: str | None = None
@@ -37,6 +39,7 @@ class FaceVerificationPipelineOutput:
                 "success": True,
                 "request_id": self.request_id,
                 "message": self._build_message(),
+                "reference_source": self.reference_source,
             }
         )
         return data
@@ -117,6 +120,95 @@ class FaceVerificationPipeline:
         return FaceVerificationPipelineOutput(
             verification=output.result,
             request_id=request_id,
+            reference_source="uploaded_card",
+            card_image_path=debug_paths.get("card_image"),
+            webcam_image_path=debug_paths.get("webcam_image"),
+            portrait_image_path=debug_paths.get("portrait_image"),
+            webcam_face_path=debug_paths.get("webcam_face"),
+            result_json_path=debug_paths.get("result_json"),
+        )
+
+    def process_from_ocr_paths(
+        self,
+        *,
+        card_image_path: str | Path,
+        webcam_image_bytes: bytes,
+        portrait_image_path: str | Path | None = None,
+    ) -> FaceVerificationPipelineOutput:
+        """Đối chiếu selfie với ảnh tham chiếu đã được OCR tạo trước đó."""
+
+        self._validate_file_bytes(webcam_image_bytes, "selfie_image")
+        try:
+            card_image = self._decode_image_path(
+                card_image_path,
+                "ảnh thẻ từ OCR",
+            )
+        except (OSError, ValueError) as exc:
+            raise FaceVerificationError(
+                "OCR_REFERENCE_IMAGE_INVALID",
+                "Ảnh CCCD tham chiếu của phiên OCR không thể sử dụng.",
+                status_code=410,
+                details={
+                    "suggestion": "Vui lòng quét lại mặt trước CCCD."
+                },
+            ) from exc
+        webcam_image = self._decode_image(webcam_image_bytes, "ảnh selfie")
+
+        portrait_image: np.ndarray | None = None
+        if portrait_image_path is not None:
+            try:
+                portrait_image = self._decode_image_path(
+                    portrait_image_path,
+                    "crop chân dung từ OCR",
+                )
+            except (OSError, ValueError):
+                # Card image là nguồn chuẩn bắt buộc và vẫn dùng được.
+                portrait_image = None
+
+        request_id = self._generate_request_id()
+        reference_source = "ocr_card_image"
+
+        with self._verification_lock:
+            service = self.provider.service
+            prepared_verifier = getattr(
+                service,
+                "verify_prepared_portrait",
+                None,
+            )
+            if portrait_image is not None and callable(prepared_verifier):
+                try:
+                    output = prepared_verifier(
+                        portrait_image,
+                        webcam_image,
+                        extraction_method="ocr_portrait_crop",
+                    )
+                    reference_source = "ocr_portrait_crop"
+                except FaceVerificationError as exc:
+                    # Chỉ fallback khi vấn đề nằm ở chân dung CCCD. Lỗi selfie
+                    # hoặc model phải được trả ngay, tránh chạy inference lặp.
+                    if not exc.error_code.startswith("CCCD_"):
+                        raise
+                    output = service.verify(
+                        card_image=card_image,
+                        webcam_image=webcam_image,
+                    )
+                    reference_source = "ocr_card_image_fallback"
+            else:
+                output = service.verify(
+                    card_image=card_image,
+                    webcam_image=webcam_image,
+                )
+
+        debug_paths = self._save_debug_artifacts(
+            request_id=request_id,
+            card_image=card_image,
+            webcam_image=webcam_image,
+            verification_output=output,
+        )
+        return FaceVerificationPipelineOutput(
+            verification=output.result,
+            request_id=request_id,
+            reference_source=reference_source,
             card_image_path=debug_paths.get("card_image"),
             webcam_image_path=debug_paths.get("webcam_image"),
             portrait_image_path=debug_paths.get("portrait_image"),
@@ -162,6 +254,28 @@ class FaceVerificationPipeline:
             ) from exc
 
         return cv2.cvtColor(rgb_array, cv2.COLOR_RGB2BGR)
+
+    def _decode_image_path(
+        self,
+        image_path: str | Path,
+        image_name: str,
+    ) -> np.ndarray:
+        path = Path(image_path)
+        if not path.is_file():
+            raise ValueError(f"Không tìm thấy {image_name}.")
+        file_size = path.stat().st_size
+        if file_size <= 0:
+            raise ValueError(f"{image_name} bị rỗng.")
+        if file_size > self.max_file_size_bytes:
+            max_size_mb = self.max_file_size_bytes / 1024 / 1024
+            raise ValueError(
+                f"{image_name} vượt quá dung lượng tối đa {max_size_mb:.0f} MB."
+            )
+        try:
+            file_bytes = path.read_bytes()
+        except OSError as exc:
+            raise ValueError(f"Không thể đọc {image_name}.") from exc
+        return self._decode_image(file_bytes, image_name)
 
     @staticmethod
     def _generate_request_id() -> str:

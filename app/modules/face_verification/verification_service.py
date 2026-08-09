@@ -164,6 +164,78 @@ class FaceVerificationService:
         start_time = perf_counter()
 
         portrait_result = self.portrait_extractor.extract(card_image)
+        return self._verify_portrait_result(
+            portrait_result=portrait_result,
+            webcam_image=webcam_image,
+            start_time=start_time,
+        )
+
+    def verify_prepared_portrait(
+        self,
+        portrait_image: np.ndarray,
+        webcam_image: np.ndarray,
+        *,
+        extraction_method: str = "ocr_portrait_crop",
+    ) -> FaceVerificationOutput:
+        """Đối chiếu từ crop chân dung mà OCR đã chuẩn bị sẵn.
+
+        Luồng này tránh phát hiện lại trên toàn bộ CCCD. Nếu crop OCR không
+        đủ tốt, pipeline bên ngoài sẽ tự động quay về ảnh thẻ đã làm phẳng.
+        """
+
+        self._validate_image(portrait_image, "portrait_image")
+        self._validate_image(webcam_image, "webcam_image")
+        start_time = perf_counter()
+
+        cccd_faces = self.embedder.extract(portrait_image)
+        if not cccd_faces:
+            raise FaceVerificationError(
+                "CCCD_FACE_NOT_FOUND",
+                "Không phát hiện được khuôn mặt trong crop chân dung của OCR.",
+                details={
+                    "referenceSource": extraction_method,
+                    "suggestion": (
+                        "Hệ thống sẽ thử lại trên ảnh CCCD đã làm phẳng."
+                    ),
+                },
+            )
+
+        cccd_face = max(
+            cccd_faces,
+            key=lambda face: (face.area, face.detection_score),
+        )
+        portrait_result = PortraitExtractionResult(
+            portrait=self._crop_face(portrait_image, cccd_face),
+            bbox=(
+                cccd_face.x1,
+                cccd_face.y1,
+                cccd_face.x2,
+                cccd_face.y2,
+            ),
+            detection_score=cccd_face.detection_score,
+            extraction_method=extraction_method,
+            source_width=int(portrait_image.shape[1]),
+            source_height=int(portrait_image.shape[0]),
+            embedding_result=cccd_face,
+            detection_image=portrait_image,
+            rotation_degrees=0,
+            detected_face_count=len(cccd_faces),
+        )
+        return self._verify_portrait_result(
+            portrait_result=portrait_result,
+            webcam_image=webcam_image,
+            start_time=start_time,
+        )
+
+    def _verify_portrait_result(
+        self,
+        *,
+        portrait_result: PortraitExtractionResult,
+        webcam_image: np.ndarray,
+        start_time: float,
+    ) -> FaceVerificationOutput:
+        """Phần dùng chung sau khi đã xác định đúng chân dung CCCD."""
+
         cccd_embedding_result = portrait_result.embedding_result
 
         # Tương thích với extractor giả/cũ; extractor mới luôn trả embedding

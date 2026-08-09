@@ -14,6 +14,7 @@ ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 def ensure_storage_dirs() -> None:
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.output_dir).mkdir(parents=True, exist_ok=True)
+    Path(settings.face_session_dir).mkdir(parents=True, exist_ok=True)
 
 
 def get_file_extension(filename: str) -> str:
