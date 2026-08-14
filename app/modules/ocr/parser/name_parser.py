@@ -1,22 +1,32 @@
+from __future__ import annotations
+
 import re
 
 
 class NameParser:
     """
-    Tách họ tên từ OCR lines.
+    Parser tách họ tên từ các dòng OCR.
     """
 
     def parse(self, lines: list[str]) -> str | None:
+        if not lines:
+            return None
+
         for index, line in enumerate(lines):
             upper_line = line.upper()
 
-            if (
-                "FULL NAME" in upper_line
-                or "HO VA TEN" in upper_line
-                or "HOVA TEN" in upper_line
+            if any(
+                keyword in upper_line
+                for keyword in [
+                    "FULL NAME",
+                    "HO VA TEN",
+                    "HOVA TEN",
+                ]
             ):
                 if index + 1 < len(lines):
-                    return self.normalize_name(lines[index + 1])
+                    normalized = self.normalize_name(lines[index + 1])
+                    if normalized:
+                        return normalized
 
         for line in lines:
             candidate = line.strip()
@@ -47,13 +57,22 @@ class NameParser:
             "PLACE OF",
             "RESIDENCE",
             "EXPIRY",
+            "VIET NAM",
+            "QUOC GIA",
         ]
 
         return text.isupper() and not any(
             keyword in text for keyword in ignored_keywords
         )
 
-    def normalize_name(self, name: str) -> str:
+    def normalize_name(self, name: str) -> str | None:
+        if not name:
+            return None
         name = re.sub(r"[^A-Za-zÀ-ỹ\s]", "", name)
         name = re.sub(r"\s+", " ", name)
-        return name.strip().upper()
+        cleaned = name.strip().upper()
+        
+        # Đảm bảo tên hợp lệ có ít nhất 2 từ
+        if len(cleaned.split()) >= 2:
+            return cleaned
+        return None

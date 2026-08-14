@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime
 
 
 class ExpiryParser:
     """
     Parser trích xuất ngày hết hạn của CCCD.
+    Đã cải tiến hỗ trợ loại bỏ dấu tiếng Việt để nhận diện nhãn chính xác hơn.
     """
 
     DATE_PATTERN = re.compile(
@@ -30,6 +32,13 @@ class ExpiryParser:
         re.IGNORECASE,
     )
 
+    def _remove_diacritics(self, text: str) -> str:
+        """Loại bỏ dấu tiếng Việt để tăng độ chính xác khi so khớp nhãn OCR."""
+        if not text:
+            return ""
+        nfkd = unicodedata.normalize("NFKD", text)
+        return "".join([c for c in nfkd if not unicodedata.combining(c)])
+
     def parse(
         self,
         lines: list[str],
@@ -37,9 +46,9 @@ class ExpiryParser:
         """
         Trích xuất ngày hết hạn từ danh sách dòng OCR.
         """
-
         for index, line in enumerate(lines):
-            if not self.EXPIRY_LABEL_PATTERN.search(line):
+            normalized_line = self._remove_diacritics(line)
+            if not self.EXPIRY_LABEL_PATTERN.search(normalized_line):
                 continue
 
             date_value = self.extract_date(line)
@@ -65,7 +74,6 @@ class ExpiryParser:
         """
         Tìm và chuẩn hóa ngày tháng theo định dạng DD/MM/YYYY.
         """
-
         match = self.DATE_PATTERN.search(text)
 
         if not match:
