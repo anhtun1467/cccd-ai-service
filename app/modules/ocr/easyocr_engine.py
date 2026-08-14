@@ -8,32 +8,19 @@ import easyocr
 from app.modules.ocr.base_engine import BaseOCREngine
 from app.modules.ocr.models import OCRResult, OCRTextBox
 from app.modules.ocr.text_normalizer import OCRTextNormalizer
-
-
-VIETNAMESE_LETTERS = (
-    "AÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬ"
-    "EÈÉẺẼẸÊỀẾỂỄỆ"
-    "IÌÍỈĨỊ"
-    "OÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢ"
-    "UÙÚỦŨỤƯỪỨỬỮỰ"
-    "YỲÝỶỸỴĐ"
+from app.modules.ocr.vietnamese_charset import (
+    FIELD_ALLOWLISTS,
+    NUMERIC_OCR_ALLOWLIST,
+    VIETNAMESE_LETTERS_UPPER,
+    VIETNAMESE_OCR_ALLOWLIST,
 )
 
-VIETNAMESE_ALLOWLIST = (
-    "0123456789"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    f"{VIETNAMESE_LETTERS}{VIETNAMESE_LETTERS.lower()}"
-    " /.,:;-'()"
-)
 
-NUMERIC_ALLOWLIST = "0123456789/.- "
-
-FIELD_ALLOWLISTS: dict[str, str] = {
-    "idNumber": "0123456789 ",
-    "dateOfBirth": NUMERIC_ALLOWLIST,
-    "dateOfExpiry": NUMERIC_ALLOWLIST,
-}
+# Giữ các tên cũ để tương thích code/test hiện tại. Nguồn duy nhất của bảng
+# ký tự nằm trong vietnamese_charset.py, tránh thiếu dấu giữa các engine.
+VIETNAMESE_LETTERS = VIETNAMESE_LETTERS_UPPER
+VIETNAMESE_ALLOWLIST = VIETNAMESE_OCR_ALLOWLIST
+NUMERIC_ALLOWLIST = NUMERIC_OCR_ALLOWLIST
 
 
 class EasyOCREngine(BaseOCREngine):

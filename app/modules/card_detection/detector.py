@@ -23,6 +23,181 @@ class CardDetector:
         self.transformer = PerspectiveTransformer()
         self.enhancer = ImageEnhancer()
 
+    def _normalized_corner_distance(
+        self,
+        first: np.ndarray,
+        second: np.ndarray,
+        image_shape: tuple[int, ...],
+    ) -> float:
+        first_rect = self.transformer.order_points(first)
+        second_rect = self.transformer.order_points(second)
+        height, width = image_shape[:2]
+        diagonal = max(float(np.hypot(width, height)), 1.0)
+        return float(
+            np.mean(np.linalg.norm(first_rect - second_rect, axis=1))
+            / diagonal
+        )
+
+    @staticmethod
+    def _expand_source_corners(
+        points: np.ndarray,
+        image_shape: tuple[int, ...],
+        scale: float,
+    ) -> np.ndarray:
+        corners = np.asarray(points, dtype=np.float32).reshape(4, 2)
+        center = corners.mean(axis=0)
+        expanded = center + (corners - center) * float(scale)
+        height, width = image_shape[:2]
+        expanded[:, 0] = np.clip(expanded[:, 0], 0, width - 1)
+        expanded[:, 1] = np.clip(expanded[:, 1], 0, height - 1)
+        return expanded.reshape(4, 1, 2).astype(np.float32)
+
+    def build_geometry_candidates(
+        self,
+        image: np.ndarray,
+        primary_corners: np.ndarray,
+        primary_geometry: dict,
+    ) -> list[dict]:
+        """Tạo các cách nắn an toàn để tầng OCR chọn bằng dữ liệu thật."""
+        height, width = image.shape[:2]
+        frame_aspect = max(width, height) / max(min(width, height), 1)
+        aspect_error = abs(
+            frame_aspect - self.transformer.CARD_ASPECT_RATIO
+        ) / self.transformer.CARD_ASPECT_RATIO
+        source_coverage = float(
+            primary_geometry.get("sourceCoverageRatio", 0.0)
+        )
+        bounding_coverage = float(
+            primary_geometry.get("sourceBoundingCoverageRatio", 0.0)
+        )
+        frame_deviation = float(
+            primary_geometry.get("frameCornerDeviation", 1.0)
+        )
+        severity = float(
+            primary_geometry.get("perspectiveSeverity", 0.0)
+        )
+        edge_touch_count = int(
+            primary_geometry.get("edgeTouchCount", 0)
+        )
+
+        frame_available = bool(
+            aspect_error <= 0.18
+            and (
+                source_coverage >= 0.48
+                or bounding_coverage >= 0.70
+                or edge_touch_count >= 3
+            )
+        )
+        frame_recommended = bool(
+            frame_available
+            and (
+                frame_deviation >= 0.018
+                or severity >= 0.050
+            )
+        )
+        primary_geometry["frameAspectErrorRatio"] = round(
+            aspect_error,
+            4,
+        )
+        primary_geometry["fullFrameCandidateAvailable"] = frame_available
+        primary_geometry["fullFrameCandidateRecommended"] = (
+            frame_recommended
+        )
+
+        candidates: list[dict] = []
+        candidate_errors: list[str] = []
+        seen_corners: list[np.ndarray] = [
+            np.asarray(primary_corners, dtype=np.float32)
+        ]
+
+        def add_perspective_candidate(
+            name: str,
+            corners: np.ndarray,
+            extra_geometry: dict | None = None,
+        ) -> None:
+            if any(
+                self._normalized_corner_distance(
+                    corners,
+                    existing,
+                    image.shape,
+                )
+                < 0.004
+                for existing in seen_corners
+            ):
+                return
+            try:
+                candidate_image, geometry = (
+                    self.transformer.transform_with_metadata(
+                        image,
+                        corners,
+                    )
+                )
+            except (TypeError, ValueError, cv2.error) as error:
+                candidate_errors.append(f"{name}: {error}")
+                return
+            geometry["candidateName"] = name
+            if extra_geometry:
+                geometry.update(extra_geometry)
+            candidates.append(
+                {
+                    "name": name,
+                    "cardImage": candidate_image,
+                    "geometry": geometry,
+                }
+            )
+            seen_corners.append(np.asarray(corners, dtype=np.float32))
+
+        if frame_available and (
+            frame_recommended or frame_deviation >= 0.008
+        ):
+            try:
+                frame_image, frame_geometry = (
+                    self.transformer.normalize_full_frame_with_metadata(
+                        image
+                    )
+                )
+                candidates.append(
+                    {
+                        "name": "full_frame",
+                        "cardImage": frame_image,
+                        "geometry": frame_geometry,
+                    }
+                )
+                seen_corners.append(
+                    np.asarray(
+                        frame_geometry["sourceCorners"],
+                        dtype=np.float32,
+                    )
+                )
+            except (TypeError, ValueError, cv2.error) as error:
+                candidate_errors.append(f"full_frame: {error}")
+
+        expanded_corners = self._expand_source_corners(
+            primary_corners,
+            image.shape,
+            scale=1.045,
+        )
+        add_perspective_candidate(
+            "expanded_contour",
+            expanded_corners,
+            {"sourceExpansionScale": 1.045},
+        )
+
+        rotated_rectangle = cv2.boxPoints(
+            cv2.minAreaRect(
+                np.asarray(primary_corners, dtype=np.float32).reshape(-1, 2)
+            )
+        ).reshape(4, 1, 2)
+        add_perspective_candidate(
+            "rotated_rectangle",
+            rotated_rectangle,
+        )
+
+        if candidate_errors:
+            primary_geometry["candidateErrors"] = candidate_errors
+        primary_geometry["geometryCandidateCount"] = len(candidates) + 1
+        return candidates[:3]
+
     def detect_from_path(
         self,
         image_path: str,
@@ -69,6 +244,11 @@ class CardDetector:
             resized,
             card_contour,
         )
+        geometry_candidates = self.build_geometry_candidates(
+            resized,
+            card_contour,
+            geometry,
+        )
         enhanced_images = self.enhancer.enhance(warped)
 
         result = {
@@ -79,6 +259,7 @@ class CardDetector:
             "cardCount": 1,
             "cardImage": warped,
             "enhancedImage": enhanced_images["final"],
+            "cardCandidates": geometry_candidates,
             "debug": {
                 "resized": resized,
                 "mask": mask,
@@ -138,3 +319,24 @@ class CardDetector:
         cv2.imwrite(str(output_path / "detector_02_mask.jpg"), result["debug"]["mask"])
         cv2.imwrite(str(output_path / "detector_03_warped.jpg"), result["debug"]["warped"])
         cv2.imwrite(str(output_path / "detector_04_enhanced.jpg"), result["debug"]["enhanced"]["final"])
+
+        for index, candidate in enumerate(
+            result.get("cardCandidates", []),
+            start=1,
+        ):
+            candidate_image = candidate.get("cardImage")
+            if candidate_image is None:
+                continue
+            candidate_name = str(candidate.get("name", f"candidate_{index}"))
+            safe_name = "".join(
+                character
+                for character in candidate_name
+                if character.isalnum() or character in ("_", "-")
+            )
+            cv2.imwrite(
+                str(
+                    output_path
+                    / f"detector_03_candidate_{index:02d}_{safe_name}.jpg"
+                ),
+                candidate_image,
+            )

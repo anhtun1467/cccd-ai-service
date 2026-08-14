@@ -11,6 +11,7 @@ import cv2
 from app.core.config import settings
 from app.core.exceptions import BadRequestException
 from app.modules.card_detection.detector import CardDetector
+from app.modules.card_detection.geometry_refiner import GeometryRefiner
 from app.modules.card_detection.image_enhancer import cccd_image_enhancer
 from app.modules.ocr.field_ocr_service import field_ocr_service
 from app.modules.ocr.line_merger import OCRLineMerger
@@ -57,9 +58,13 @@ class OcrPipelineService:
     CROP_BLUR_WARNING_THRESHOLD = 80.0
     CROP_DARK_WARNING_THRESHOLD = 60.0
     MINIMUM_READABLE_CORE_FIELDS = 3
+    GEOMETRY_RETRY_SCORE = 22.0
+    GEOMETRY_SELECTION_MARGIN = 0.60
+    SKEW_SELECTION_MARGIN = 0.25
 
     def __init__(self) -> None:
         self.card_detector = CardDetector()
+        self.geometry_refiner = GeometryRefiner()
         self.ocr_service = ocr_service
         self.field_ocr_service = field_ocr_service
         if getattr(self.field_ocr_service, "engine", None) is None:
@@ -176,19 +181,6 @@ class OcrPipelineService:
                 image_file=image_file,
             )
 
-        blur_info = cccd_image_enhancer.estimate_blur(
-            card_image
-        )
-
-        # Laplacian thấp chỉ là cảnh báo. Ảnh đã perspective/resize thường
-        # có điểm thấp hơn ảnh gốc dù chữ vẫn còn đọc được, vì vậy quyết
-        # định từ chối được hoãn đến sau OCR và dựa thêm vào các trường lõi.
-        cropped_quality = check_image_quality(
-            card_image,
-            blur_threshold=self.CROP_BLUR_WARNING_THRESHOLD,
-            dark_threshold=self.CROP_DARK_WARNING_THRESHOLD,
-        )
-
         if detector_enhanced_image is not None:
             enhanced_image = detector_enhanced_image
         else:
@@ -245,6 +237,21 @@ class OcrPipelineService:
             card_image,
             enhanced_image,
             full_ocr_result,
+            geometry_selection,
+        ) = self.select_best_geometry_candidate(
+            card_image=card_image,
+            enhanced_image=enhanced_image,
+            first_ocr_result=full_ocr_result,
+            detection_result=detection_result,
+            card_output_path=card_output_path,
+            enhanced_output_path=enhanced_output_path,
+            debug_dir=debug_dir,
+        )
+
+        (
+            card_image,
+            enhanced_image,
+            full_ocr_result,
             orientation_info,
         ) = self.ensure_upright_orientation(
             card_image=card_image,
@@ -253,6 +260,39 @@ class OcrPipelineService:
             enhanced_output_path=enhanced_output_path,
             debug_dir=debug_dir,
             first_ocr_result=full_ocr_result,
+        )
+
+        (
+            card_image,
+            enhanced_image,
+            full_ocr_result,
+            skew_info,
+        ) = self.refine_residual_skew(
+            card_image=card_image,
+            enhanced_image=enhanced_image,
+            first_ocr_result=full_ocr_result,
+            card_output_path=card_output_path,
+            enhanced_output_path=enhanced_output_path,
+            debug_dir=debug_dir,
+        )
+        orientation_info["geometrySelection"] = geometry_selection
+        orientation_info["residualSkew"] = skew_info
+        orientation_info["selectedScore"] = (
+            self.calculate_orientation_score(full_ocr_result)
+        )
+        selected_geometry = detection_result.get("geometry", {})
+        if isinstance(selected_geometry, dict):
+            selected_geometry["residualSkewCorrection"] = skew_info
+        detection_result["cardImage"] = card_image
+        detection_result["enhancedImage"] = enhanced_image
+
+        # Chấm chất lượng trên đúng ảnh cuối cùng đã được chọn. Laplacian
+        # thấp chỉ là cảnh báo; quyết định từ chối vẫn dựa thêm vào OCR.
+        blur_info = cccd_image_enhancer.estimate_blur(card_image)
+        cropped_quality = check_image_quality(
+            card_image,
+            blur_threshold=self.CROP_BLUR_WARNING_THRESHOLD,
+            dark_threshold=self.CROP_DARK_WARNING_THRESHOLD,
         )
 
         full_ocr_variant = "card"
@@ -629,6 +669,404 @@ class OcrPipelineService:
         )
         score += confidence * 2.0
         return round(float(score), 3)
+
+    def score_geometry_ocr_result(
+        self,
+        ocr_result: dict[str, Any],
+    ) -> float:
+        """Chấm OCR khi so sánh các cách nắn, có tính lượng chữ giữ lại."""
+        score = self.score_full_ocr_result(ocr_result)
+        text_boxes = ocr_result.get("textBoxes", [])
+        if not isinstance(text_boxes, list):
+            text_boxes = []
+
+        meaningful_boxes = 0
+        meaningful_characters = 0
+        for item in text_boxes:
+            if isinstance(item, dict):
+                text = str(item.get("text") or item.get("originalText") or "")
+                confidence = float(item.get("confidence", 0.0) or 0.0)
+            else:
+                text = str(getattr(item, "text", "") or "")
+                confidence = float(getattr(item, "confidence", 0.0) or 0.0)
+            characters = re.findall(r"[A-Za-zÀ-ỹ0-9]", text)
+            if confidence < 0.08 or len(characters) < 2:
+                continue
+            meaningful_boxes += 1
+            meaningful_characters += len(characters)
+
+        score += min(1.5, meaningful_boxes * 0.075)
+        score += min(1.5, meaningful_characters * 0.006)
+        return round(float(score), 3)
+
+    def select_best_geometry_candidate(
+        self,
+        card_image: Any,
+        enhanced_image: Any,
+        first_ocr_result: dict[str, Any],
+        detection_result: dict[str, Any],
+        card_output_path: Path,
+        enhanced_output_path: Path,
+        debug_dir: Path,
+    ) -> tuple[Any, Any, dict[str, Any], dict[str, Any]]:
+        """Thử các quad an toàn và chỉ nhận ứng viên có OCR tốt hơn."""
+        primary_geometry = detection_result.get("geometry", {})
+        if not isinstance(primary_geometry, dict):
+            primary_geometry = {}
+        primary_name = str(
+            primary_geometry.get("candidateName", "perspective_contour")
+        )
+        primary_score = self.score_geometry_ocr_result(first_ocr_result)
+        candidates = detection_result.get("cardCandidates", [])
+        if not isinstance(candidates, list):
+            candidates = []
+
+        retry_due_to_geometry = bool(
+            primary_geometry.get("fullFrameCandidateRecommended")
+            or float(primary_geometry.get("perspectiveSeverity", 0.0)) >= 0.10
+        )
+        should_retry = bool(
+            candidates
+            and (
+                primary_score < self.GEOMETRY_RETRY_SCORE
+                or retry_due_to_geometry
+            )
+        )
+        selection_info: dict[str, Any] = {
+            "retried": should_retry,
+            "initialCandidate": primary_name,
+            "initialScore": primary_score,
+            "selectedCandidate": primary_name,
+            "selectedScore": primary_score,
+            "selectionMargin": self.GEOMETRY_SELECTION_MARGIN,
+            "candidates": [
+                {
+                    "name": primary_name,
+                    "score": primary_score,
+                    "selected": True,
+                }
+            ],
+        }
+
+        if not should_retry:
+            primary_geometry["selection"] = selection_info
+            cv2.imwrite(
+                str(debug_dir / "detector_03_geometry_selected.jpg"),
+                card_image,
+            )
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                selection_info,
+            )
+
+        best_name = primary_name
+        best_card = card_image
+        best_result = first_ocr_result
+        best_score = primary_score
+        best_geometry = primary_geometry
+
+        for index, candidate in enumerate(candidates[:3], start=1):
+            if not isinstance(candidate, dict):
+                continue
+            candidate_card = candidate.get("cardImage")
+            if candidate_card is None:
+                continue
+            candidate_name = str(candidate.get("name", f"candidate_{index}"))
+            candidate_path = (
+                debug_dir
+                / f"detector_03_ocr_candidate_{index:02d}.jpg"
+            )
+            if not cv2.imwrite(str(candidate_path), candidate_card):
+                selection_info["candidates"].append(
+                    {
+                        "name": candidate_name,
+                        "score": None,
+                        "error": "Không thể lưu ảnh ứng viên",
+                        "selected": False,
+                    }
+                )
+                continue
+
+            candidate_result = self.run_full_card_ocr(candidate_path)
+            candidate_score = self.score_geometry_ocr_result(
+                candidate_result
+            )
+            selection_info["candidates"].append(
+                {
+                    "name": candidate_name,
+                    "score": candidate_score,
+                    "selected": False,
+                }
+            )
+            if candidate_score > best_score:
+                best_name = candidate_name
+                best_card = candidate_card
+                best_result = candidate_result
+                best_score = candidate_score
+                geometry = candidate.get("geometry", {})
+                best_geometry = geometry if isinstance(geometry, dict) else {}
+
+        if (
+            best_name == primary_name
+            or best_score < primary_score + self.GEOMETRY_SELECTION_MARGIN
+        ):
+            primary_geometry["selection"] = selection_info
+            cv2.imwrite(
+                str(debug_dir / "detector_03_geometry_selected.jpg"),
+                card_image,
+            )
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                selection_info,
+            )
+
+        try:
+            best_enhanced = self.card_detector.enhancer.enhance(
+                best_card
+            )["final"]
+        except (TypeError, ValueError, cv2.error, KeyError) as error:
+            selection_info["selectionError"] = (
+                f"Không thể tăng cường ứng viên đã chọn: {error}"
+            )
+            primary_geometry["selection"] = selection_info
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                selection_info,
+            )
+
+        card_saved = cv2.imwrite(str(card_output_path), best_card)
+        enhanced_saved = cv2.imwrite(
+            str(enhanced_output_path),
+            best_enhanced,
+        )
+        if not card_saved or not enhanced_saved:
+            cv2.imwrite(str(card_output_path), card_image)
+            cv2.imwrite(str(enhanced_output_path), enhanced_image)
+            selection_info["selectionError"] = (
+                "Không thể lưu cặp ảnh hình học đã chọn"
+            )
+            primary_geometry["selection"] = selection_info
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                selection_info,
+            )
+
+        selection_info["selectedCandidate"] = best_name
+        selection_info["selectedScore"] = best_score
+        for candidate_info in selection_info["candidates"]:
+            candidate_info["selected"] = bool(
+                candidate_info.get("name") == best_name
+            )
+        selected_geometry = dict(best_geometry)
+        selected_geometry["selection"] = selection_info
+        detection_result["geometry"] = selected_geometry
+        cv2.imwrite(
+            str(debug_dir / "detector_03_geometry_selected.jpg"),
+            best_card,
+        )
+        return (
+            best_card,
+            best_enhanced,
+            best_result,
+            selection_info,
+        )
+
+    def refine_residual_skew(
+        self,
+        card_image: Any,
+        enhanced_image: Any,
+        first_ocr_result: dict[str, Any],
+        card_output_path: Path,
+        enhanced_output_path: Path,
+        debug_dir: Path,
+    ) -> tuple[Any, Any, dict[str, Any], dict[str, Any]]:
+        """Sửa xiên nhỏ bằng shear và xác nhận lại bằng OCR toàn thẻ."""
+        try:
+            estimate = self.geometry_refiner.estimate_text_skew(
+                card_image,
+                first_ocr_result.get("textBoxes", []),
+            )
+        except (TypeError, ValueError, cv2.error) as error:
+            info = {
+                "retried": False,
+                "selectedCorrectionDegrees": 0.0,
+                "error": f"Không thể đo độ xiên: {error}",
+            }
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                info,
+            )
+
+        initial_score = self.score_geometry_ocr_result(first_ocr_result)
+        correction_angles = self.geometry_refiner.build_correction_angles(
+            estimate
+        )
+        info: dict[str, Any] = {
+            "retried": bool(correction_angles),
+            "estimate": estimate,
+            "initialScore": initial_score,
+            "selectedScore": initial_score,
+            "selectedCorrectionDegrees": 0.0,
+            "correctionMode": "vertical_shear",
+            "candidates": [],
+        }
+        selected_debug_path = debug_dir / "detector_06_deskewed.jpg"
+        if not correction_angles:
+            cv2.imwrite(str(selected_debug_path), card_image)
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                info,
+            )
+
+        best_card = card_image
+        best_enhanced = enhanced_image
+        best_result = first_ocr_result
+        best_score = initial_score
+        best_angle = 0.0
+        initial_angle = abs(float(estimate.get("angleDegrees", 0.0)))
+        initial_confidence = float(estimate.get("confidence", 0.0))
+
+        for index, correction_angle in enumerate(
+            correction_angles,
+            start=1,
+        ):
+            try:
+                candidate_card = self.geometry_refiner.correct_vertical_shear(
+                    card_image,
+                    correction_angle,
+                )
+                candidate_enhanced = (
+                    self.geometry_refiner.correct_vertical_shear(
+                        enhanced_image,
+                        correction_angle,
+                    )
+                )
+            except (TypeError, ValueError, cv2.error) as error:
+                info["candidates"].append(
+                    {
+                        "correctionDegrees": correction_angle,
+                        "score": None,
+                        "error": str(error),
+                        "selected": False,
+                    }
+                )
+                continue
+
+            candidate_path = (
+                debug_dir
+                / f"detector_06_skew_candidate_{index:02d}.jpg"
+            )
+            if not cv2.imwrite(str(candidate_path), candidate_card):
+                info["candidates"].append(
+                    {
+                        "correctionDegrees": correction_angle,
+                        "score": None,
+                        "error": "Không thể lưu ảnh ứng viên",
+                        "selected": False,
+                    }
+                )
+                continue
+
+            candidate_result = self.run_full_card_ocr(candidate_path)
+            candidate_score = self.score_geometry_ocr_result(
+                candidate_result
+            )
+            try:
+                residual = self.geometry_refiner.estimate_text_skew(
+                    candidate_card,
+                    candidate_result.get("textBoxes", []),
+                )
+            except (TypeError, ValueError, cv2.error):
+                residual = {
+                    "angleDegrees": None,
+                    "confidence": 0.0,
+                    "reliable": False,
+                }
+
+            residual_value = residual.get("angleDegrees")
+            residual_angle = (
+                abs(float(residual_value))
+                if residual_value is not None
+                else initial_angle
+            )
+            candidate_info = {
+                "correctionDegrees": correction_angle,
+                "score": candidate_score,
+                "residualEstimate": residual,
+                "selected": False,
+            }
+            info["candidates"].append(candidate_info)
+
+            score_improved = bool(
+                candidate_score >= best_score + self.SKEW_SELECTION_MARGIN
+            )
+            geometry_improved_without_ocr_loss = bool(
+                best_angle == 0.0
+                and initial_confidence >= 0.55
+                and residual_angle <= initial_angle * 0.55
+                and candidate_score >= initial_score - 0.05
+            )
+            if score_improved or geometry_improved_without_ocr_loss:
+                best_card = candidate_card
+                best_enhanced = candidate_enhanced
+                best_result = candidate_result
+                best_score = candidate_score
+                best_angle = float(correction_angle)
+
+        if best_angle == 0.0:
+            cv2.imwrite(str(selected_debug_path), card_image)
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                info,
+            )
+
+        card_saved = cv2.imwrite(str(card_output_path), best_card)
+        enhanced_saved = cv2.imwrite(
+            str(enhanced_output_path),
+            best_enhanced,
+        )
+        if not card_saved or not enhanced_saved:
+            cv2.imwrite(str(card_output_path), card_image)
+            cv2.imwrite(str(enhanced_output_path), enhanced_image)
+            info["selectionError"] = (
+                "Không thể lưu cặp ảnh sau hiệu chỉnh xiên"
+            )
+            cv2.imwrite(str(selected_debug_path), card_image)
+            return (
+                card_image,
+                enhanced_image,
+                first_ocr_result,
+                info,
+            )
+
+        info["selectedCorrectionDegrees"] = round(best_angle, 3)
+        info["selectedScore"] = best_score
+        for candidate_info in info["candidates"]:
+            candidate_info["selected"] = bool(
+                float(candidate_info.get("correctionDegrees", 0.0))
+                == best_angle
+            )
+        cv2.imwrite(str(selected_debug_path), best_card)
+        return (
+            best_card,
+            best_enhanced,
+            best_result,
+            info,
+        )
 
     def select_better_full_ocr_result(
         self,

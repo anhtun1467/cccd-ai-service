@@ -339,9 +339,11 @@ class ContourDetector:
         self,
         contour: np.ndarray,
     ) -> np.ndarray | None:
-        """Tìm bốn góc thật của thẻ bằng nhiều mức xấp xỉ."""
+        """Tìm bốn góc thật và chọn xấp xỉ giữ được nhiều viền nhất."""
         hull = cv2.convexHull(contour)
         perimeter = cv2.arcLength(hull, True)
+        hull_area = max(float(cv2.contourArea(hull)), 1.0)
+        contour_area = max(float(cv2.contourArea(contour)), 1.0)
 
         factors = (
             self.epsilon_factor,
@@ -354,6 +356,9 @@ class ContourDetector:
             0.05,
         )
 
+        candidates: list[tuple[float, float, np.ndarray]] = []
+        seen: set[tuple[int, ...]] = set()
+
         for factor in dict.fromkeys(factors):
             approx = cv2.approxPolyDP(
                 hull,
@@ -363,12 +368,44 @@ class ContourDetector:
             if len(approx) != 4 or not cv2.isContourConvex(approx):
                 continue
 
-            if cv2.contourArea(approx) < cv2.contourArea(contour) * 0.75:
+            approx_area = float(cv2.contourArea(approx))
+            if approx_area < contour_area * 0.75:
                 continue
 
-            return approx.astype(np.float32)
+            # Chuẩn hóa thứ tự theo góc quanh tâm để loại ứng viên trùng
+            # giữa nhiều epsilon khác nhau.
+            points = approx.reshape(4, 2).astype(np.float32)
+            center = points.mean(axis=0)
+            order = np.argsort(
+                np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
+            )
+            key = tuple(
+                int(round(value))
+                for value in points[order].reshape(-1)
+            )
+            if key in seen:
+                continue
+            seen.add(key)
 
-        return None
+            retained_hull = min(1.0, approx_area / hull_area)
+            retained_contour = min(1.0, approx_area / contour_area)
+            score = retained_hull * 0.70 + retained_contour * 0.30
+            candidates.append(
+                (
+                    score,
+                    -float(factor),
+                    approx.astype(np.float32),
+                )
+            )
+
+        if not candidates:
+            return None
+
+        # Bản cũ trả ứng viên đầu tiên (epsilon 3%), dù một epsilon khác có
+        # thể giữ góc thật tốt hơn. Chọn theo diện tích viền được bảo toàn,
+        # rồi ưu tiên epsilon nhỏ khi điểm bằng nhau.
+        candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return candidates[0][2]
 
     def expand_quadrilateral(
         self,

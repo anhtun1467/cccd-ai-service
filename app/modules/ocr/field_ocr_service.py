@@ -9,6 +9,10 @@ from typing import Any
 from app.modules.ocr.base_engine import BaseOCREngine
 from app.modules.ocr.easyocr_engine import EasyOCREngine
 from app.modules.ocr.field_cropper import CCCDFieldCropper
+from app.modules.ocr.glyph_matcher import (
+    VietnameseGlyphMatcher,
+    vietnamese_glyph_matcher,
+)
 from app.modules.ocr.line_merger import OCRLineMerger
 from app.modules.ocr.text_normalizer import OCRTextNormalizer
 
@@ -101,10 +105,12 @@ class FieldOCRService:
     def __init__(
         self,
         engine: BaseOCREngine | None = None,
+        glyph_matcher: VietnameseGlyphMatcher | None = None,
     ) -> None:
         # Khởi tạo chậm để pipeline có thể dùng chung một EasyOCR Reader
         # cho OCR toàn thẻ và OCR từng vùng, tránh nạp hai bộ model CPU.
         self.engine = engine
+        self.glyph_matcher = glyph_matcher or vietnamese_glyph_matcher
         self.cropper = CCCDFieldCropper()
         self.line_merger = OCRLineMerger(
             vertical_tolerance_ratio=0.30,
@@ -309,6 +315,7 @@ class FieldOCRService:
                 "processedHeight": field_result.get("processedHeight"),
                 "attemptCount": len(candidates),
                 "retryErrors": errors,
+                "glyphMatch": selected.get("glyphMatch"),
             }
 
         portrait_result = self.prepare_portrait_result(
@@ -325,11 +332,17 @@ class FieldOCRService:
     def extract_normalized_lines(
         self,
         ocr_result: Any,
+        text_overrides: dict[int, str] | None = None,
     ) -> list[str]:
         """Ghép text box theo tọa độ trước khi nối giá trị của field."""
         text_boxes: list[dict[str, Any]] = []
-        for item in getattr(ocr_result, "text_boxes", []) or []:
-            text = str(getattr(item, "text", "")).strip()
+        overrides = text_overrides or {}
+        for index, item in enumerate(
+            getattr(ocr_result, "text_boxes", []) or []
+        ):
+            text = str(
+                overrides.get(index, getattr(item, "text", ""))
+            ).strip()
             box = getattr(item, "box", None)
             if not text or not box:
                 continue
@@ -370,7 +383,34 @@ class FieldOCRService:
         else:
             ocr_result = self.engine.recognize(str(image_path))
 
-        normalized_lines = self.extract_normalized_lines(ocr_result)
+        ocr_text_boxes = list(
+            getattr(ocr_result, "text_boxes", []) or []
+        )
+        try:
+            text_overrides, glyph_match = (
+                self.glyph_matcher.refine_ocr_boxes(
+                    image_path=image_path,
+                    text_boxes=ocr_text_boxes,
+                    field_name=field_name,
+                )
+            )
+        except Exception as error:
+            # Atlas là tầng bổ trợ. Lỗi matcher không được làm hỏng OCR.
+            text_overrides = {}
+            glyph_match = {
+                "enabled": True,
+                "available": False,
+                "fieldName": field_name,
+                "applied": False,
+                "corrections": [],
+                "skippedReason": "MATCHER_ERROR",
+                "error": str(error),
+            }
+
+        normalized_lines = self.extract_normalized_lines(
+            ocr_result,
+            text_overrides=text_overrides,
+        )
         joined_text = self.join_field_text(
             field_name=field_name,
             lines=normalized_lines,
@@ -380,7 +420,11 @@ class FieldOCRService:
             value=joined_text,
         )
         confidence = self.calculate_average_confidence(
-            list(getattr(ocr_result, "text_boxes", []) or [])
+            ocr_text_boxes
+        )
+        glyph_score = (
+            float(glyph_match.get("averageBestScore") or 0.0)
+            * float(glyph_match.get("coverage") or 0.0)
         )
 
         return {
@@ -393,6 +437,15 @@ class FieldOCRService:
             "success": bool(getattr(ocr_result, "success", False)),
             "message": str(getattr(ocr_result, "message", "")),
             "imagePath": str(image_path),
+            "glyphMatch": glyph_match,
+            "glyphRefinedText": [
+                text_overrides.get(
+                    index,
+                    str(getattr(item, "text", "")),
+                )
+                for index, item in enumerate(ocr_text_boxes)
+            ],
+            "_glyphScore": glyph_score,
         }
 
     @classmethod
@@ -533,6 +586,13 @@ class FieldOCRService:
             candidate_score += variant_bonus.get(
                 str(candidate.get("variant")),
                 0.0,
+            )
+            # Điểm glyph chỉ là tie-breaker nhỏ; đồng thuận giữa các crop và
+            # validation theo field vẫn có trọng số lớn hơn.
+            candidate_score += min(
+                0.35,
+                max(0.0, float(candidate.get("_glyphScore") or 0.0))
+                * 0.35,
             )
             if field_name in {
                 "fullName",

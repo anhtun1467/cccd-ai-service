@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from app.modules.card_detection.contour_detector import ContourDetector
+from app.modules.card_detection.detector import CardDetector
 from app.modules.card_detection.perspective_transformer import (
     PerspectiveTransformer,
 )
@@ -71,6 +72,52 @@ def test_portrait_card_is_rotated_to_landscape_after_warp() -> None:
 
     assert warped.shape[1] > warped.shape[0]
     assert metadata["geometryRotationDegrees"] == 90
+
+
+def test_full_frame_candidate_keeps_all_pixels_and_card_ratio() -> None:
+    transformer = PerspectiveTransformer()
+    image = np.full((700, 1073, 3), 180, dtype=np.uint8)
+    cv2.rectangle(image, (0, 0), (1072, 699), (0, 0, 255), 5)
+
+    normalized, metadata = transformer.normalize_full_frame_with_metadata(
+        image
+    )
+
+    height, width = normalized.shape[:2]
+    assert abs((width / height) - transformer.CARD_ASPECT_RATIO) < 0.02
+    assert metadata["perspectiveApplied"] is False
+    assert metadata["candidateName"] == "full_frame"
+    assert metadata["sourceCoverageRatio"] > 0.99
+
+
+def test_detector_offers_full_frame_when_contour_would_crop_card() -> None:
+    detector = CardDetector()
+    image = np.full((700, 1073, 3), 205, dtype=np.uint8)
+    skewed_corners = np.array(
+        [
+            [[18, 12]],
+            [[1035, 80]],
+            [[1060, 682]],
+            [[8, 690]],
+        ],
+        dtype=np.float32,
+    )
+    _, geometry = detector.transformer.transform_with_metadata(
+        image,
+        skewed_corners,
+    )
+
+    candidates = detector.build_geometry_candidates(
+        image,
+        skewed_corners,
+        geometry,
+    )
+
+    assert geometry["fullFrameCandidateAvailable"] is True
+    assert geometry["fullFrameCandidateRecommended"] is True
+    assert "full_frame" in {
+        candidate["name"] for candidate in candidates
+    }
 
 
 def test_rotated_contour_ratio_is_orientation_independent() -> None:
