@@ -1,6 +1,7 @@
 class AddressParser:
     """
     Tách quê quán và nơi thường trú từ OCR lines.
+    Cập nhật chuẩn hóa chuỗi và từ khóa dừng.
     """
 
     ORIGIN_KEYWORDS = [
@@ -20,6 +21,8 @@ class AddressParser:
         "TNENG",
         "ISSUE",
         "MRZ",
+        "NOI CAP",  # Bổ sung thêm từ khóa thường gặp
+        "QUYEN",    # Bổ sung thêm từ khóa thường gặp
     ]
 
     def parse_place_of_origin(self, lines: list[str]) -> str | None:
@@ -116,11 +119,14 @@ class AddressParser:
 
         for part in parts:
             part = part.strip()
+            # Cải tiến và bổ sung các lỗi OCR thường gặp
             part = part.replace("Ha Noii", "Ha Noi")
             part = part.replace("Ha No", "Ha Noi")
             part = part.replace("Thanh Zuah", "Thanh Xuan")
             part = part.replace("Neech", "Ngach")
             part = part.replace("  ", " ")
+            # Thêm xử lý dọn dẹp ký tự thừa nếu có
+            part = part.strip(" ,.-")
 
             if part:
                 cleaned_parts.append(part)
