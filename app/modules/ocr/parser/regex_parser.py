@@ -106,6 +106,7 @@ class CCCDRegexParser:
 
     def __init__(self) -> None:
         self.expiry_parser = ExpiryParser()
+        self.nationality_parser = NationalityParser()
 
     def parse(
         self,
@@ -114,7 +115,6 @@ class CCCDRegexParser:
         """
         Parse dữ liệu CCCD từ chuỗi hoặc danh sách dòng OCR.
         """
-
         lines = self.prepare_lines(text)
 
         return {
@@ -141,7 +141,6 @@ class CCCDRegexParser:
         """
         Chuẩn hóa dữ liệu đầu vào thành danh sách dòng.
         """
-
         if isinstance(text, str):
             source_lines = text.splitlines()
         else:
@@ -162,7 +161,6 @@ class CCCDRegexParser:
         """
         Tìm số CCCD gồm 12 chữ số.
         """
-
         for line in lines:
             compact_line = re.sub(
                 r"(?<=\d)\s+(?=\d)",
@@ -186,7 +184,6 @@ class CCCDRegexParser:
         """
         Trích xuất họ tên.
         """
-
         value = self.extract_label_value(
             lines=lines,
             label_pattern=self.NAME_LABEL_PATTERN,
@@ -216,7 +213,6 @@ class CCCDRegexParser:
         """
         Trích xuất ngày sinh.
         """
-
         for index, line in enumerate(lines):
             if not self.BIRTH_LABEL_PATTERN.search(line):
                 continue
@@ -243,7 +239,6 @@ class CCCDRegexParser:
         """
         Trích xuất giới tính.
         """
-
         value = self.extract_label_value(
             lines=lines,
             label_pattern=self.GENDER_LABEL_PATTERN,
@@ -268,9 +263,8 @@ class CCCDRegexParser:
         lines: list[str],
     ) -> str | None:
         """
-        Trích xuất quốc tịch.
+        Trích xuất quốc tịch sử dụng NationalityParser tích hợp.
         """
-
         value = self.extract_label_value(
             lines=lines,
             label_pattern=self.NATIONALITY_LABEL_PATTERN,
@@ -278,33 +272,15 @@ class CCCDRegexParser:
         )
 
         if value:
-            normalized = value.lower()
+            parsed = self.nationality_parser.parse(value)
+            if parsed:
+                return parsed
 
-            if re.search(
-                r"\b(viet\s*nam|vict\s*nam|vict\s*nana)\b",
-                normalized,
-            ):
-                return "Viet Nam"
-
-            value = self.remove_known_labels(value)
-            value = re.sub(
-                r"[^A-Za-zÀ-ỹ\s]",
-                " ",
-                value,
-            )
-            value = re.sub(r"\s+", " ", value).strip()
-
-            if value:
-                return value
-
-        # CCCD Việt Nam gần như luôn có quốc tịch Việt Nam.
+        # Quét toàn bộ các dòng tìm quốc tịch nếu chưa thấy ở nhãn
         for line in lines:
-            if re.search(
-                r"\bviet\s*nam\b",
-                line,
-                re.IGNORECASE,
-            ):
-                return "Viet Nam"
+            parsed = self.nationality_parser.parse(line)
+            if parsed:
+                return parsed
 
         return None
 
@@ -318,7 +294,6 @@ class CCCDRegexParser:
 
         Có thể ghép thêm một dòng tiếp theo nếu chưa gặp nhãn mới.
         """
-
         for index, line in enumerate(lines):
             if not label_pattern.search(line):
                 continue
@@ -373,11 +348,7 @@ class CCCDRegexParser:
     ) -> str | None:
         """
         Lấy phần dữ liệu nằm sau nhãn.
-
-        Ví dụ:
-        Ho va ten / Full name: NGUYEN VAN A
         """
-
         for index, line in enumerate(lines):
             if not label_pattern.search(line):
                 continue
@@ -409,14 +380,12 @@ class CCCDRegexParser:
         """
         Xóa nhãn và các ký tự phân cách khỏi dòng OCR.
         """
-
         value = label_pattern.sub(
             "",
             line,
             count=1,
         )
 
-        # Xóa nhãn tiếng Anh còn sót lại sau dấu "/".
         value = re.sub(
             r"^\s*/?\s*"
             r"(?:"
@@ -448,7 +417,6 @@ class CCCDRegexParser:
         """
         Xóa các nhãn CCCD còn sót trong giá trị.
         """
-
         value = self.STOP_LABEL_PATTERN.sub(
             " ",
             value,
@@ -469,7 +437,6 @@ class CCCDRegexParser:
         """
         Làm sạch chuỗi địa chỉ.
         """
-
         value = re.sub(
             r"\s+([,.;])",
             r"\1",
@@ -497,7 +464,6 @@ class CCCDRegexParser:
         """
         Trích xuất ngày tháng và chuẩn hóa thành DD/MM/YYYY.
         """
-
         match = self.DATE_PATTERN.search(text)
 
         if not match:
@@ -534,3 +500,24 @@ class CCCDRegexParser:
             f"{month_number:02d}/"
             f"{year_number:04d}"
         )
+
+
+class NationalityParser:
+    """
+    Parser tách quốc tịch.
+    """
+
+    def parse(self, text: str) -> str | None:
+        if not text:
+            return None
+
+        upper = text.upper()
+
+        if (
+            "VIET" in upper
+            or "VICT" in upper
+            or "NANA" in upper
+        ):
+            return "Viet Nam"
+
+        return None
