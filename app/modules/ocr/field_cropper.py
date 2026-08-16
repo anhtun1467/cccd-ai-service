@@ -47,7 +47,7 @@ class CCCDFieldCropper:
         ),
         "dateOfBirth": PixelRegion(
             x1=270,
-            y1=370,
+            y1=380,
             x2=900,
             y2=450,
         ),
@@ -55,23 +55,23 @@ class CCCDFieldCropper:
             x1=270,
             y1=405,
             x2=650,
-            y2=485,
+            y2=480,
         ),
         "nationality": PixelRegion(
             x1=620,
             y1=405,
             x2=995,
-            y2=485,
+            y2=480,
         ),
         "placeOfOrigin": PixelRegion(
-            x1=265,
-            y1=460,
+            x1=300,
+            y1=455,
             x2=995,
-            y2=560,
+            y2=530,
         ),
         "placeOfResidence": PixelRegion(
-            x1=265,
-            y1=515,
+            x1=300,
+            y1=530,
             x2=995,
             y2=630,
         ),
@@ -84,8 +84,8 @@ class CCCDFieldCropper:
         "portrait": PixelRegion(
             x1=20,
             y1=200,
-            x2=270,
-            y2=520,
+            x2=310,
+            y2=545,
         ),
     }
 
@@ -93,15 +93,17 @@ class CCCDFieldCropper:
     # tập trung vào phần giá trị, giúp EasyOCR không phải đồng thời đọc
     # nhãn nhỏ, hoa văn bảo an và trường kế bên trên ảnh hơi mờ.
     VALUE_REGIONS: dict[str, PixelRegion] = {
-        "idNumber": PixelRegion(330, 245, 850, 320),
+        "idNumber": PixelRegion(330, 245, 850, 325),
         # Dừng trước dòng ngày sinh để chữ nhỏ của nhãn kế tiếp không bị
         # ghép vào họ tên trên ảnh mờ.
-        "fullName": PixelRegion(270, 330, 985, 420),
+        "fullName": PixelRegion(270, 325, 985, 400),
         "dateOfBirth": PixelRegion(500, 380, 860, 455),
-        "gender": PixelRegion(400, 410, 625, 490),
-        "nationality": PixelRegion(730, 410, 1000, 490),
-        "placeOfOrigin": PixelRegion(280, 465, 1000, 555),
-        "placeOfResidence": PixelRegion(280, 520, 1000, 630),
+        "gender": PixelRegion(400, 405, 625, 480),
+        "nationality": PixelRegion(730, 405, 1000, 480),
+        # Hai vùng địa chỉ dùng chung ranh giới y=530. Khi OCR toàn thẻ
+        # nhận ra nhãn nơi thường trú, ranh giới này sẽ bám theo nhãn thật.
+        "placeOfOrigin": PixelRegion(300, 455, 1000, 530),
+        "placeOfResidence": PixelRegion(300, 530, 1000, 630),
         # Phải bao trọn TIGHT_VALUE_REGIONS["dateOfExpiry"]. Vùng hẹp
         # trải từ y=520 và đến x=345 để giữ đủ dãy DD/MM/YYYY.
         "dateOfExpiry": PixelRegion(15, 520, 345, 630),
@@ -130,6 +132,8 @@ class CCCDFieldCropper:
         image_path: str,
         output_dir: str,
         layout_y_offset: float = 0.0,
+        address_layout: dict[str, Any] | None = None,
+        field_layout: dict[str, Any] | None = None,
     ) -> dict[str, dict[str, Any]]:
         source_path = Path(image_path)
 
@@ -153,6 +157,8 @@ class CCCDFieldCropper:
             output_dir=output_dir,
             source_image_path=str(source_path),
             layout_y_offset=layout_y_offset,
+            address_layout=address_layout,
+            field_layout=field_layout,
         )
 
     def crop_fields(
@@ -161,6 +167,8 @@ class CCCDFieldCropper:
         output_dir: str,
         source_image_path: str | None = None,
         layout_y_offset: float = 0.0,
+        address_layout: dict[str, Any] | None = None,
+        field_layout: dict[str, Any] | None = None,
     ) -> dict[str, dict[str, Any]]:
         if image is None or image.size == 0:
             raise ValueError(
@@ -194,10 +202,13 @@ class CCCDFieldCropper:
         results: dict[str, dict[str, Any]] = {}
 
         for field_name, base_region in self.FIELD_REGIONS.items():
-            region = self.shift_region(
+            region = self.resolve_region(
                 field_name,
                 base_region,
                 layout_y_offset,
+                address_layout=address_layout,
+                region_kind="field",
+                field_layout=field_layout,
             )
             self.validate_region(region)
 
@@ -301,18 +312,22 @@ class CCCDFieldCropper:
                         "variant": "tight_processed",
                         "imagePath": str(tight_processed_path),
                     },
-                    {
-                        "variant": "tight_binary",
-                        "imagePath": str(tight_binary_path),
-                    },
                 ])
+
+                variant_image_paths.append({
+                    "variant": "tight_binary",
+                    "imagePath": str(tight_binary_path),
+                })
 
             value_base_region = self.VALUE_REGIONS.get(field_name)
             if value_base_region is not None:
-                value_region = self.shift_region(
+                value_region = self.resolve_region(
                     field_name,
                     value_base_region,
                     layout_y_offset,
+                    address_layout=address_layout,
+                    region_kind="value",
+                    field_layout=field_layout,
                 )
                 self.validate_region(value_region)
                 value_image = normalized_card[
@@ -345,16 +360,31 @@ class CCCDFieldCropper:
                         f"Không thể lưu ảnh value của {field_name}"
                     )
 
-                variant_image_paths.extend([
-                    {
-                        "variant": "value_processed",
-                        "imagePath": str(value_processed_path),
-                    },
-                    {
-                        "variant": "value_raw",
-                        "imagePath": str(value_raw_path),
-                    },
-                ])
+                raw_spec = {
+                    "variant": "value_raw",
+                    "imagePath": str(value_raw_path),
+                }
+                processed_spec = {
+                    "variant": "value_processed",
+                    "imagePath": str(value_processed_path),
+                }
+                value_gray = cv2.cvtColor(
+                    value_image,
+                    cv2.COLOR_BGR2GRAY,
+                )
+                # Ảnh đủ sáng ưu tiên raw để giữ nét/dấu và giảm kích thước
+                # EasyOCR. Ảnh tối vẫn ưu tiên CLAHE như luồng cũ để không
+                # làm suy giảm yêu cầu đọc ảnh thiếu sáng.
+                if float(np.mean(value_gray)) < 85.0:
+                    variant_image_paths.extend([
+                        processed_spec,
+                        raw_spec,
+                    ])
+                else:
+                    variant_image_paths.extend([
+                        raw_spec,
+                        processed_spec,
+                    ])
 
                 if field_name in self.DETAIL_RETRY_FIELDS:
                     detail_image = self.preprocess_detail_field(
@@ -425,6 +455,8 @@ class CCCDFieldCropper:
         debug_image = self.draw_regions(
             normalized_card,
             layout_y_offset=layout_y_offset,
+            address_layout=address_layout,
+            field_layout=field_layout,
         )
         debug_output_path = (
             output_path / "fields_debug.jpg"
@@ -442,6 +474,8 @@ class CCCDFieldCropper:
         value_debug_image = self.draw_value_regions(
             normalized_card,
             layout_y_offset=layout_y_offset,
+            address_layout=address_layout,
+            field_layout=field_layout,
         )
         value_debug_output_path = (
             output_path / "fields_value_debug.jpg"
@@ -469,6 +503,17 @@ class CCCDFieldCropper:
             "imageWidth": self.CANONICAL_WIDTH,
             "imageHeight": self.CANONICAL_HEIGHT,
             "layoutYOffset": round(float(layout_y_offset), 2),
+            "addressLayout": address_layout or {
+                "boundaryY": self.address_boundary_y(
+                    layout_y_offset,
+                    None,
+                ),
+                "source": "template_with_layout_offset",
+            },
+            "fieldLayout": field_layout or {
+                "source": "template_with_layout_offset",
+                "layoutYOffset": round(float(layout_y_offset), 2),
+            },
         }
 
         return results
@@ -667,6 +712,96 @@ class CCCDFieldCropper:
             y2=y2,
         )
 
+    def address_boundary_y(
+        self,
+        layout_y_offset: float,
+        address_layout: dict[str, Any] | None,
+    ) -> int:
+        delta = int(round(max(-55.0, min(55.0, layout_y_offset))))
+        fallback = 530 + delta
+        raw_boundary: Any = fallback
+        if isinstance(address_layout, dict):
+            raw_boundary = address_layout.get("boundaryY", fallback)
+        try:
+            boundary = int(round(float(raw_boundary)))
+        except (TypeError, ValueError):
+            boundary = fallback
+        # Luôn chừa đủ chỗ cho ít nhất một dòng của mỗi trường.
+        return max(470, min(585, boundary))
+
+    def region_from_field_layout(
+        self,
+        field_name: str,
+        region_kind: str,
+        field_layout: dict[str, Any] | None,
+    ) -> PixelRegion | None:
+        """Đọc một vùng neo theo nhãn và bỏ qua dữ liệu ngoài giới hạn."""
+        if not isinstance(field_layout, dict):
+            return None
+        regions = field_layout.get("regions")
+        if not isinstance(regions, dict):
+            return None
+        field_regions = regions.get(field_name)
+        if not isinstance(field_regions, dict):
+            return None
+        raw_region = field_regions.get(region_kind)
+        if not isinstance(raw_region, dict):
+            return None
+        try:
+            resolved = PixelRegion(
+                x1=int(round(float(raw_region["x1"]))),
+                y1=int(round(float(raw_region["y1"]))),
+                x2=int(round(float(raw_region["x2"]))),
+                y2=int(round(float(raw_region["y2"]))),
+            )
+            self.validate_region(resolved)
+        except (KeyError, TypeError, ValueError):
+            return None
+        return resolved
+
+    def resolve_region(
+        self,
+        field_name: str,
+        region: PixelRegion,
+        layout_y_offset: float,
+        address_layout: dict[str, Any] | None = None,
+        region_kind: str = "field",
+        field_layout: dict[str, Any] | None = None,
+    ) -> PixelRegion:
+        """Dịch crop và khóa hai trường địa chỉ vào một ranh giới chung."""
+        shifted = self.region_from_field_layout(
+            field_name=field_name,
+            region_kind=region_kind,
+            field_layout=field_layout,
+        )
+        if shifted is None:
+            shifted = self.shift_region(
+                field_name,
+                region,
+                layout_y_offset,
+            )
+        if field_name not in {"placeOfOrigin", "placeOfResidence"}:
+            return shifted
+
+        boundary = self.address_boundary_y(
+            layout_y_offset,
+            address_layout if address_layout is not None else field_layout,
+        )
+        if field_name == "placeOfOrigin":
+            return PixelRegion(
+                x1=shifted.x1,
+                y1=min(shifted.y1, boundary - 1),
+                x2=shifted.x2,
+                y2=boundary,
+            )
+
+        return PixelRegion(
+            x1=shifted.x1,
+            y1=boundary,
+            x2=shifted.x2,
+            y2=self.CANONICAL_HEIGHT,
+        )
+
     def validate_region(
         self,
         region: PixelRegion,
@@ -691,14 +826,19 @@ class CCCDFieldCropper:
         self,
         image: np.ndarray,
         layout_y_offset: float = 0.0,
+        address_layout: dict[str, Any] | None = None,
+        field_layout: dict[str, Any] | None = None,
     ) -> np.ndarray:
         debug_image = image.copy()
 
         for field_name, base_region in self.FIELD_REGIONS.items():
-            region = self.shift_region(
+            region = self.resolve_region(
                 field_name,
                 base_region,
                 layout_y_offset,
+                address_layout=address_layout,
+                region_kind="field",
+                field_layout=field_layout,
             )
             cv2.rectangle(
                 debug_image,
@@ -727,14 +867,19 @@ class CCCDFieldCropper:
         self,
         image: np.ndarray,
         layout_y_offset: float = 0.0,
+        address_layout: dict[str, Any] | None = None,
+        field_layout: dict[str, Any] | None = None,
     ) -> np.ndarray:
         """Vẽ riêng các vùng giá trị được ưu tiên khi OCR ảnh mờ."""
         debug_image = image.copy()
         for field_name, base_region in self.VALUE_REGIONS.items():
-            region = self.shift_region(
+            region = self.resolve_region(
                 field_name,
                 base_region,
                 layout_y_offset,
+                address_layout=address_layout,
+                region_kind="value",
+                field_layout=field_layout,
             )
             cv2.rectangle(
                 debug_image,

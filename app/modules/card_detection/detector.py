@@ -52,11 +52,23 @@ class CardDetector:
         expanded[:, 1] = np.clip(expanded[:, 1], 0, height - 1)
         return expanded.reshape(4, 1, 2).astype(np.float32)
 
+    @staticmethod
+    def _scale_source_corners(
+        points: np.ndarray,
+        scale_x: float,
+        scale_y: float,
+    ) -> np.ndarray:
+        corners = np.asarray(points, dtype=np.float32).reshape(4, 2).copy()
+        corners[:, 0] *= float(scale_x)
+        corners[:, 1] *= float(scale_y)
+        return corners.reshape(4, 1, 2).astype(np.float32)
+
     def build_geometry_candidates(
         self,
         image: np.ndarray,
         primary_corners: np.ndarray,
         primary_geometry: dict,
+        source_candidates: list[dict] | None = None,
     ) -> list[dict]:
         """Tạo các cách nắn an toàn để tầng OCR chọn bằng dữ liệu thật."""
         height, width = image.shape[:2]
@@ -104,6 +116,19 @@ class CardDetector:
             frame_recommended
         )
 
+        # Detector đã xác nhận đủ bốn cạnh và nội dung trải toàn thẻ thì
+        # không tạo thêm ảnh nắn gần như giống hệt. Đây là đường nhanh cho
+        # ảnh chụp đúng khung và ảnh scan nguyên thẻ.
+        if (
+            bool(primary_geometry.get("wholeCardReliable"))
+            and not source_candidates
+        ):
+            primary_geometry["geometryCandidateCount"] = 1
+            primary_geometry["geometryCandidatesSkippedReason"] = (
+                "PRIMARY_WHOLE_CARD_RELIABLE"
+            )
+            return []
+
         candidates: list[dict] = []
         candidate_errors: list[str] = []
         seen_corners: list[np.ndarray] = [
@@ -146,6 +171,36 @@ class CardDetector:
                 }
             )
             seen_corners.append(np.asarray(corners, dtype=np.float32))
+
+        # Ứng viên bốn cạnh Hough được ưu tiên trước các phép nới hình học.
+        # Đây thường là quad đúng khi ảnh chụp xa làm threshold sáng dính
+        # thẻ vào bàn tay, màn hình hoặc mặt bàn.
+        for source_candidate in source_candidates or []:
+            if not isinstance(source_candidate, dict):
+                continue
+            corners = source_candidate.get("corners")
+            if corners is None:
+                continue
+            name = str(
+                source_candidate.get("name")
+                or "hough_quadrilateral"
+            )
+            detection = source_candidate.get("detection")
+            add_perspective_candidate(
+                name,
+                np.asarray(corners, dtype=np.float32),
+                {
+                    "candidateName": name,
+                    "detectionMethod": "hough_quadrilateral",
+                    "detectionMetrics": (
+                        detection if isinstance(detection, dict) else {}
+                    ),
+                    "wholeCardReliable": bool(
+                        isinstance(detection, dict)
+                        and detection.get("wholeCardCandidate")
+                    ),
+                },
+            )
 
         if frame_available and (
             frame_recommended or frame_deviation >= 0.008
@@ -233,21 +288,110 @@ class CardDetector:
                 },
             )
 
-        card_contour, mask, contours = self.contour_detector.find_card_contour_from_image(
+        (
+            card_contour,
+            mask,
+            contours,
+            contour_detection,
+        ) = self.contour_detector.find_card_contour_candidates_from_image(
             resized
         )
 
         if card_contour is None:
             raise BadRequestException("Không phát hiện được vùng CCCD")
 
-        warped, geometry = self.transformer.transform_with_metadata(
-            resized,
+        alternate_candidates = contour_detection.get(
+            "alternateCandidates",
+            [],
+        )
+        if not isinstance(alternate_candidates, list):
+            alternate_candidates = []
+
+        # Phát hiện trên ảnh cao 700 px để nhanh, nhưng nếu ảnh gốc lớn hơn
+        # thì perspective transform trực tiếp từ ảnh gốc. Ảnh chụp xa nhờ
+        # vậy không mất thêm chi tiết chữ trước khi vào OCR.
+        use_original_resolution = bool(
+            image.shape[0] > resized.shape[0]
+            or image.shape[1] > resized.shape[1]
+        )
+        geometry_image = image if use_original_resolution else resized
+        scale_x = (
+            image.shape[1] / float(resized.shape[1])
+            if use_original_resolution
+            else 1.0
+        )
+        scale_y = (
+            image.shape[0] / float(resized.shape[0])
+            if use_original_resolution
+            else 1.0
+        )
+        geometry_corners = self._scale_source_corners(
             card_contour,
+            scale_x,
+            scale_y,
+        )
+        scaled_alternates: list[dict] = []
+        for candidate in alternate_candidates:
+            if not isinstance(candidate, dict):
+                continue
+            candidate_corners = candidate.get("corners")
+            if candidate_corners is None:
+                continue
+            scaled_alternates.append({
+                **candidate,
+                "corners": self._scale_source_corners(
+                    np.asarray(candidate_corners, dtype=np.float32),
+                    scale_x,
+                    scale_y,
+                ),
+            })
+
+        warped, geometry = self.transformer.transform_with_metadata(
+            geometry_image,
+            geometry_corners,
+        )
+        detection_method = str(
+            contour_detection.get("detectionMethod")
+            or "brightness_contour"
+        )
+        if detection_method == "hough_quadrilateral":
+            geometry["candidateName"] = "hough_quadrilateral"
+        geometry["detectionMethod"] = detection_method
+        geometry["detectionScore"] = contour_detection.get(
+            "detectionScore"
+        )
+        geometry["detectionMetrics"] = contour_detection.get(
+            "detectionMetrics",
+            {},
+        )
+        geometry["primaryAreaRatio"] = contour_detection.get(
+            "primaryAreaRatio"
+        )
+        geometry["primaryEdgeTouchCount"] = contour_detection.get(
+            "primaryEdgeTouchCount"
+        )
+        geometry["wholeCardReliable"] = bool(
+            contour_detection.get("wholeCardReliable")
+        )
+        geometry["houghFallbackEvaluated"] = bool(
+            contour_detection.get("houghFallbackEvaluated")
+        )
+        geometry["houghSkippedReason"] = contour_detection.get(
+            "houghSkippedReason"
+        )
+        geometry["geometrySource"] = (
+            "original_image" if use_original_resolution else "resized_image"
+        )
+        geometry["detectorResizeScaleX"] = round(scale_x, 6)
+        geometry["detectorResizeScaleY"] = round(scale_y, 6)
+        geometry["detectorSourceCorners"] = (
+            self.transformer.order_points(card_contour).tolist()
         )
         geometry_candidates = self.build_geometry_candidates(
-            resized,
-            card_contour,
+            geometry_image,
+            geometry_corners,
             geometry,
+            source_candidates=scaled_alternates,
         )
         enhanced_images = self.enhancer.enhance(warped)
 

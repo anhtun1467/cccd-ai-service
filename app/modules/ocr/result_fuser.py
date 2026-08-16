@@ -2402,10 +2402,50 @@ def estimate_layout_y_offset(
     return round(max(-55.0, min(55.0, offset)), 2)
 
 
-def _spatial_label_kind(value: str) -> str | None:
+def _spatial_label_kinds(value: str) -> set[str]:
+    """Nhận diện các nhãn field có thể cùng nằm trong một OCR box."""
     plain = _plain(value)
     compact = re.sub(r"[^a-z]", "", plain)
     tokens = re.findall(r"[a-z]+", plain)
+    kinds: set[str] = set()
+
+    def fuzzy_token(target: str, threshold: float = 0.67) -> bool:
+        return any(
+            SequenceMatcher(None, token, target).ratio() >= threshold
+            for token in tokens
+        )
+
+    if (
+        re.search(r"\b(?:s[o06]|no)\s*(?:/|:|\b)", plain)
+        or "personalidentificationnumber" in compact
+    ):
+        kinds.add("idNumber")
+
+    if (
+        re.search(r"\bho\b.{0,28}\bten\b", plain)
+        or re.search(r"\bfull\s*n?a?m?e?\b", plain)
+        or (fuzzy_token("full", 0.72) and fuzzy_token("name", 0.60))
+    ):
+        kinds.add("fullName")
+
+    if (
+        re.search(r"\bngay\b.{0,26}\bsinh\b", plain)
+        or re.search(r"\bdate\b.{0,20}\bb(?:ir|ut|irt)[a-z]*\b", plain)
+        or ("sinh" in tokens and "ngay" in tokens)
+    ):
+        kinds.add("dateOfBirth")
+
+    if (
+        re.search(r"\bgioi\s*t[i1l]nh\b|\bsex\b", plain)
+        or (fuzzy_token("gioi", 0.70) and fuzzy_token("tinh", 0.65))
+    ):
+        kinds.add("gender")
+
+    if (
+        re.search(r"\bqu[o0]c\s*t[i1l]ch\b|\bnational", plain)
+        or (fuzzy_token("quoc", 0.70) and fuzzy_token("tich", 0.65))
+    ):
+        kinds.add("nationality")
 
     if (
         re.search(r"\bque\s*quan\b", plain)
@@ -2418,7 +2458,7 @@ def _spatial_label_kind(value: str) -> str | None:
         )
         or re.search(r"\bo[fl0]\s*origin\b", plain)
     ):
-        return "placeOfOrigin"
+        kinds.add("placeOfOrigin")
 
     fuzzy_vi_residence = False
     for index, token in enumerate(tokens):
@@ -2461,7 +2501,23 @@ def _spatial_label_kind(value: str) -> str | None:
             and len(compact) >= 6
         )
     ):
-        return "placeOfResidence"
+        kinds.add("placeOfResidence")
+
+    if (
+        re.search(r"\bco\b.{0,24}\bgia\b.{0,16}\btri\b.{0,12}\bden\b", plain)
+        or re.search(r"\bdate\b.{0,16}\bexpiry\b|\bexpiry\s*date\b", plain)
+    ):
+        kinds.add("dateOfExpiry")
+
+    return kinds
+
+
+def _spatial_label_kind(value: str) -> str | None:
+    """Giữ API cũ dành riêng cho hai nhãn địa chỉ."""
+    kinds = _spatial_label_kinds(value)
+    for field_name in ("placeOfOrigin", "placeOfResidence"):
+        if field_name in kinds:
+            return field_name
 
     return None
 
@@ -2489,6 +2545,266 @@ def _same_spatial_row(
             24.0,
         )
     )
+
+
+def estimate_field_crop_layout(
+    text_boxes: list[dict[str, Any]] | None,
+    image_size: tuple[int, int] | list[int] | None = None,
+) -> dict[str, Any]:
+    """Dựng vùng cắt từng hàng từ vị trí nhãn thật trên CCCD.
+
+    Tọa độ mẫu chỉ đóng vai trò giới hạn an toàn. Khi nhận ra nhãn, mép
+    trên của nhãn hiện tại và nhãn kế tiếp tạo thành một dải không chồng
+    lấn, nhờ vậy họ tên không ăn sang ngày sinh và quê quán không ăn sang
+    nơi thường trú.
+    """
+    boxes = _canonical_spatial_boxes(text_boxes, image_size)
+    offset = estimate_layout_y_offset(text_boxes, image_size)
+    expected_centers = {
+        "idNumber": 285.0 + offset,
+        "fullName": 335.0 + offset,
+        "dateOfBirth": 405.0 + offset,
+        "gender": 445.0 + offset,
+        "nationality": 445.0 + offset,
+        "placeOfOrigin": 490.0 + offset,
+        "placeOfResidence": 550.0 + offset,
+        "dateOfExpiry": 565.0 + offset,
+    }
+
+    anchors: dict[str, dict[str, float]] = {}
+    for field_name, expected_center in expected_centers.items():
+        candidates = [
+            item
+            for item in boxes
+            if field_name in _spatial_label_kinds(str(item["text"]))
+            and abs(float(item["_center_y"]) - expected_center) <= 92.0
+        ]
+        if not candidates:
+            continue
+        anchor = min(
+            candidates,
+            key=lambda item: abs(float(item["_center_y"]) - expected_center),
+        )
+        same_row = [
+            item for item in candidates if _same_spatial_row(anchor, item)
+        ]
+        anchors[field_name] = {
+            "left": round(min(float(item["_left"]) for item in same_row), 2),
+            "top": round(min(float(item["_top"]) for item in same_row), 2),
+            "right": round(max(float(item["_right"]) for item in same_row), 2),
+            "bottom": round(max(float(item["_bottom"]) for item in same_row), 2),
+            "center": round(float(median(
+                float(item["_center_y"]) for item in same_row
+            )), 2),
+        }
+
+    field_templates = {
+        "idNumber": (255, 230, 930, 330),
+        "fullName": (270, 315, 975, 395),
+        "dateOfBirth": (270, 380, 900, 450),
+        "gender": (270, 405, 650, 480),
+        "nationality": (620, 405, 995, 480),
+        "placeOfOrigin": (300, 455, 995, 530),
+        "placeOfResidence": (300, 530, 995, 630),
+        "dateOfExpiry": (0, 515, 345, 630),
+    }
+    value_templates = {
+        "idNumber": (330, 245, 850, 325),
+        "fullName": (270, 325, 985, 400),
+        "dateOfBirth": (500, 380, 860, 455),
+        "gender": (400, 405, 625, 480),
+        "nationality": (730, 405, 1000, 480),
+        "placeOfOrigin": (300, 455, 1000, 530),
+        "placeOfResidence": (300, 530, 1000, 630),
+        "dateOfExpiry": (15, 520, 345, 630),
+    }
+
+    next_anchor = {
+        "idNumber": "fullName",
+        "fullName": "dateOfBirth",
+        "dateOfBirth": "gender",
+        "gender": "placeOfOrigin",
+        "nationality": "placeOfOrigin",
+        "placeOfOrigin": "placeOfResidence",
+    }
+
+    def resolve_template(
+        field_name: str,
+        template: tuple[int, int, int, int],
+    ) -> dict[str, int]:
+        x1, base_y1, x2, base_y2 = template
+        shifted_y1 = int(round(base_y1 + offset))
+        shifted_y2 = (
+            630
+            if field_name in {"placeOfResidence", "dateOfExpiry"}
+            else int(round(base_y2 + offset))
+        )
+        y1 = shifted_y1
+        y2 = shifted_y2
+        anchor = anchors.get(field_name)
+        if anchor:
+            proposed_y1 = int(round(float(anchor["top"]) - 7.0))
+            y1 = max(
+                shifted_y1 - 30,
+                min(shifted_y1 + 30, proposed_y1),
+            )
+
+        following = anchors.get(next_anchor.get(field_name, ""))
+        if following:
+            proposed_y2 = int(round(float(following["top"]) - 3.0))
+            y2 = max(
+                shifted_y2 - 35,
+                min(shifted_y2 + 35, proposed_y2),
+            )
+
+        y1 = max(0, min(628, y1))
+        y2 = max(y1 + 24, min(630, y2))
+        return {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
+
+    regions: dict[str, dict[str, dict[str, int]]] = {}
+    for field_name, template in field_templates.items():
+        regions[field_name] = {
+            "field": resolve_template(field_name, template),
+            "value": resolve_template(
+                field_name,
+                value_templates[field_name],
+            ),
+        }
+
+    # Mỗi cặp hàng dùng đúng một ranh giới chung. Không để dải họ tên ăn
+    # xuống ngày sinh hoặc ngày sinh ăn xuống giới tính như các template
+    # rộng trước đây. Mép nhãn hàng dưới là ưu tiên, midpoint template là
+    # fallback khi OCR toàn thẻ chưa thấy nhãn.
+    adjacent_rows = (
+        ("idNumber", "fullName"),
+        ("fullName", "dateOfBirth"),
+        ("dateOfBirth", "gender"),
+        ("gender", "placeOfOrigin"),
+    )
+    for upper_field, lower_field in adjacent_rows:
+        lower_anchor = anchors.get(lower_field)
+        if lower_anchor:
+            boundary = int(round(float(lower_anchor["top"]) - 3.0))
+        else:
+            boundary = int(round((
+                regions[upper_field]["field"]["y2"]
+                + regions[lower_field]["field"]["y1"]
+            ) * 0.5))
+        upper_start = regions[upper_field]["field"]["y1"]
+        lower_end = regions[lower_field]["field"]["y2"]
+        boundary = max(upper_start + 24, min(lower_end - 24, boundary))
+        for kind in ("field", "value"):
+            regions[upper_field][kind]["y2"] = boundary
+            regions[lower_field][kind]["y1"] = boundary
+
+    # Hai cột giới tính và quốc tịch luôn cùng một hàng, kể cả khi EasyOCR
+    # tách thành hai box hoặc chỉ nhận ra một trong hai nhãn.
+    shared_start = int(regions["gender"]["field"]["y1"])
+    shared_end = int(regions["gender"]["field"]["y2"])
+    for field_name in ("gender", "nationality"):
+        for kind in ("field", "value"):
+            regions[field_name][kind]["y1"] = shared_start
+            regions[field_name][kind]["y2"] = shared_end
+
+    default_boundary = 530.0 + offset
+    boundary = default_boundary
+    residence_anchor = anchors.get("placeOfResidence")
+    if residence_anchor:
+        boundary = max(
+            default_boundary - 45.0,
+            min(default_boundary + 60.0, float(residence_anchor["top"]) - 2.0),
+        )
+    origin_anchor = anchors.get("placeOfOrigin")
+    if origin_anchor:
+        boundary = max(boundary, float(origin_anchor["bottom"]) + 6.0)
+    boundary_y = int(round(max(470.0, min(585.0, boundary))))
+    for kind in ("field", "value"):
+        regions["placeOfOrigin"][kind]["y2"] = boundary_y
+        regions["placeOfResidence"][kind]["y1"] = boundary_y
+        regions["placeOfResidence"][kind]["y2"] = 630
+
+    return {
+        "source": "label_anchors" if anchors else "template_with_layout_offset",
+        "layoutYOffset": offset,
+        "boundaryY": boundary_y,
+        "labelAnchors": anchors,
+        "regions": regions,
+    }
+
+
+def estimate_address_crop_layout(
+    text_boxes: list[dict[str, Any]] | None,
+    image_size: tuple[int, int] | list[int] | None = None,
+) -> dict[str, Any]:
+    """Định vị ranh giới hai vùng địa chỉ từ nhãn trên chính thẻ.
+
+    ``layoutYOffset`` vẫn là fallback cho ảnh mà OCR chưa nhận ra nhãn.
+    Khi thấy nhãn ``Nơi thường trú / Place of residence``, mép trên của
+    nhãn trở thành ranh giới dùng chung: crop quê quán kết thúc tại đó và
+    crop nơi thường trú bắt đầu tại đó. Vì vậy hai crop không thể chồng lấn.
+    """
+    boxes = _canonical_spatial_boxes(text_boxes, image_size)
+    offset = estimate_layout_y_offset(text_boxes, image_size)
+    default_boundary = 530.0 + offset
+    expected_centers = {
+        "placeOfOrigin": 490.0 + offset,
+        "placeOfResidence": 550.0 + offset,
+    }
+    anchors: dict[str, dict[str, float]] = {}
+
+    for field_name, expected_center in expected_centers.items():
+        candidates = [
+            item
+            for item in boxes
+            if _spatial_label_kind(item["text"]) == field_name
+            and abs(item["_center_y"] - expected_center) <= 82.0
+        ]
+        if not candidates:
+            continue
+        anchor = min(
+            candidates,
+            key=lambda item: abs(item["_center_y"] - expected_center),
+        )
+        same_row = [
+            item
+            for item in candidates
+            if _same_spatial_row(anchor, item)
+        ]
+        anchors[field_name] = {
+            "top": round(min(item["_top"] for item in same_row), 2),
+            "bottom": round(max(item["_bottom"] for item in same_row), 2),
+            "center": round(float(median(
+                item["_center_y"] for item in same_row
+            )), 2),
+        }
+
+    boundary = default_boundary
+    source = "template_with_layout_offset"
+    residence_anchor = anchors.get("placeOfResidence")
+    if residence_anchor:
+        anchored_boundary = float(residence_anchor["top"]) - 2.0
+        # Chỉ cho nhãn dịch ranh giới trong một khoảng an toàn. Một box OCR
+        # nhận nhầm ở đầu hoặc cuối thẻ không được kéo crop sang trường khác.
+        boundary = max(
+            default_boundary - 45.0,
+            min(default_boundary + 60.0, anchored_boundary),
+        )
+        source = "residence_label"
+
+    origin_anchor = anchors.get("placeOfOrigin")
+    if origin_anchor:
+        boundary = max(
+            boundary,
+            float(origin_anchor["bottom"]) + 6.0,
+        )
+
+    boundary = round(max(470.0, min(585.0, boundary)), 2)
+    return {
+        "boundaryY": boundary,
+        "source": source,
+        "layoutYOffset": offset,
+        "labelAnchors": anchors,
+    }
 
 
 def _join_spatial_row(
@@ -2549,7 +2865,6 @@ def recover_spatial_address(
         if _same_spatial_row(anchor, item)
     ]
     anchor_left = min(item["_left"] for item in anchor_row_labels)
-    anchor_right = max(item["_right"] for item in anchor_row_labels)
     anchor_center = float(median(
         item["_center_y"] for item in anchor_row_labels
     ))

@@ -66,3 +66,4 @@ def test_field_date_rejects_impossible_cccd_year() -> None:
 
     assert service.clean_date("17/10/1801") is None
     assert service.clean_date("17/10/1991") == "17/10/1991"
+

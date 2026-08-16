@@ -123,6 +123,9 @@ class FieldOCRService:
         card_image_path: str,
         output_dir: str,
         layout_y_offset: float = 0.0,
+        address_layout: dict[str, Any] | None = None,
+        field_layout: dict[str, Any] | None = None,
+        reference_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Cắt ảnh CCCD và OCR từng trường riêng biệt.
@@ -153,6 +156,8 @@ class FieldOCRService:
             image_path=str(card_path),
             output_dir=output_dir,
             layout_y_offset=layout_y_offset,
+            address_layout=address_layout,
+            field_layout=field_layout,
         )
 
         structured_data: dict[str, str | None] = {
@@ -208,6 +213,11 @@ class FieldOCRService:
                 if field_name in self.OCR_RETRY_FIELDS
                 else 1
             )
+            reference_value = (
+                reference_data.get(field_name)
+                if isinstance(reference_data, dict)
+                else None
+            )
 
             for spec in variant_specs:
                 if len(candidates) >= maximum_attempts:
@@ -245,6 +255,7 @@ class FieldOCRService:
                 if self.can_stop_field_retries(
                     field_name=field_name,
                     candidates=candidates,
+                    reference_value=reference_value,
                 ):
                     break
 
@@ -314,6 +325,17 @@ class FieldOCRService:
                 "processedWidth": field_result.get("processedWidth"),
                 "processedHeight": field_result.get("processedHeight"),
                 "attemptCount": len(candidates),
+                "referenceAgreement": bool(
+                    reference_value
+                    and self.field_candidate_key(
+                        field_name,
+                        cleaned_value,
+                    )
+                    == self.field_candidate_key(
+                        field_name,
+                        reference_value,
+                    )
+                ),
                 "retryErrors": errors,
                 "glyphMatch": selected.get("glyphMatch"),
             }
@@ -453,6 +475,7 @@ class FieldOCRService:
         cls,
         field_name: str,
         candidates: list[dict[str, Any]],
+        reference_value: Any = None,
     ) -> bool:
         """Dừng sớm khi đã có giá trị đủ mạnh, tránh tăng thời gian CPU."""
         if not candidates:
@@ -482,6 +505,11 @@ class FieldOCRService:
                 ) == key
                 for item in candidates
             )
+            if (
+                key
+                and cls.field_candidate_key(field_name, reference_value) == key
+            ):
+                support += 1
             return support >= 2
 
         if field_name == "dateOfBirth":
@@ -507,9 +535,14 @@ class FieldOCRService:
                 ) == key
                 for item in candidates
             )
+            if (
+                key
+                and cls.field_candidate_key(field_name, reference_value) == key
+            ):
+                support += 1
             return bool(
                 valid_name
-                and len(candidates) >= 2
+                and (len(candidates) >= 2 or support >= 2)
                 and support >= 2
                 and cls.diacritic_score(text) > 0
             )
@@ -528,8 +561,13 @@ class FieldOCRService:
                 ) == key
                 for item in candidates
             )
+            if (
+                key
+                and cls.field_candidate_key(field_name, reference_value) == key
+            ):
+                support += 1
             return bool(
-                len(candidates) >= 2
+                (len(candidates) >= 2 or support >= 2)
                 and support >= 2
                 and len(text.split()) >= 3
                 and len(components) >= 2

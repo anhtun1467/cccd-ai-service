@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import Any
 
 import easyocr
@@ -74,6 +75,15 @@ class EasyOCREngine(BaseOCREngine):
             )
 
         try:
+            # Ảnh processed đã được cropper phóng 2.7-3.5 lần. Phóng tiếp
+            # 1.8 lần trong EasyOCR làm detector xử lý ảnh rộng tới 3200 px
+            # ở mỗi retry mà không tạo thêm chi tiết. Ảnh raw chưa phóng vẫn
+            # giữ mag_ratio cao hơn để bảo toàn khả năng đọc chữ nhỏ.
+            raw_field_variant = bool(
+                field_mode
+                and "_raw" in Path(image_path).stem.casefold()
+            )
+            field_mag_ratio = 1.60 if raw_field_variant else 1.00
             # Torch mới cảnh báo pin_memory ở mỗi lần EasyOCR chạy CPU.
             # Đây không phải lỗi và gây ngập log khi OCR nhiều field.
             with warnings.catch_warnings():
@@ -92,15 +102,15 @@ class EasyOCREngine(BaseOCREngine):
                     # trên các dòng dài. Greedy ổn định hơn và các nguồn
                     # ảnh khác nhau được hợp nhất ở tầng field/fuser.
                     decoder="greedy",
-                    batch_size=1,
+                    batch_size=4,
                     workers=0,
                     allowlist=allowlist,
                     min_size=3 if field_mode else 5,
                     text_threshold=0.35 if field_mode else 0.55,
                     low_text=0.15 if field_mode else 0.30,
                     link_threshold=0.20 if field_mode else 0.30,
-                    canvas_size=3200 if field_mode else 2560,
-                    mag_ratio=1.8 if field_mode else 1.5,
+                    canvas_size=2048 if field_mode else 2560,
+                    mag_ratio=field_mag_ratio if field_mode else 1.5,
                     slope_ths=0.20 if field_mode else 0.15,
                     ycenter_ths=0.55 if field_mode else 0.50,
                     height_ths=0.60 if field_mode else 0.50,

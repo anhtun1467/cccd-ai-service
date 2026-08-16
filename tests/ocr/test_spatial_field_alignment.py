@@ -1,4 +1,5 @@
 from app.modules.ocr.result_fuser import (
+    estimate_address_crop_layout,
     estimate_layout_y_offset,
     fuse_ocr_data,
     recover_spatial_address,
@@ -30,6 +31,30 @@ def test_layout_offset_ignores_twelve_letter_noise() -> None:
     boxes = [_box("OOOOIIIIllll", 320, 312, 620, 342)]
 
     assert estimate_layout_y_offset(boxes, (1000, 630)) == 0.0
+
+
+def test_residence_label_defines_shared_address_crop_boundary() -> None:
+    boxes = [
+        _box("001205016122", 320, 270, 620, 300),
+        _box("Quê quán / Place of origin", 300, 470, 590, 495),
+        _box(
+            "Nơi thường trú / Place of residence",
+            300,
+            526,
+            690,
+            551,
+        ),
+    ]
+
+    layout = estimate_address_crop_layout(boxes, (1000, 630))
+
+    assert layout["source"] == "residence_label"
+    assert layout["boundaryY"] == 524.0
+    assert layout["labelAnchors"]["placeOfOrigin"]["bottom"] == 495.0
+    assert (
+        layout["labelAnchors"]["placeOfResidence"]["top"]
+        == 526.0
+    )
 
 
 def test_origin_is_rebuilt_by_x_position_instead_of_ocr_order() -> None:

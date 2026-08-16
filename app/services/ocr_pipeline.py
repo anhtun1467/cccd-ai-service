@@ -16,6 +16,8 @@ from app.modules.card_detection.image_enhancer import cccd_image_enhancer
 from app.modules.ocr.field_ocr_service import field_ocr_service
 from app.modules.ocr.line_merger import OCRLineMerger
 from app.modules.ocr.result_fuser import (
+    estimate_address_crop_layout,
+    estimate_field_crop_layout,
     estimate_layout_y_offset,
     fuse_ocr_data,
     remove_accents,
@@ -58,7 +60,7 @@ class OcrPipelineService:
     CROP_BLUR_WARNING_THRESHOLD = 80.0
     CROP_DARK_WARNING_THRESHOLD = 60.0
     MINIMUM_READABLE_CORE_FIELDS = 3
-    GEOMETRY_RETRY_SCORE = 22.0
+    GEOMETRY_RETRY_SCORE = 12.0
     GEOMETRY_SELECTION_MARGIN = 0.60
     SKEW_SELECTION_MARGIN = 0.25
 
@@ -85,6 +87,7 @@ class OcrPipelineService:
         """
 
         start_time = time.perf_counter()
+        stage_timings_ms: dict[str, float] = {}
         image_file = Path(image_path)
 
         if not image_file.exists():
@@ -129,6 +132,7 @@ class OcrPipelineService:
             exist_ok=True,
         )
 
+        detection_started = time.perf_counter()
         try:
             detection_result = (
                 self.card_detector.detect_from_path(
@@ -162,6 +166,11 @@ class OcrPipelineService:
                     ),
                 },
             )
+
+        stage_timings_ms["cardDetection"] = round(
+            (time.perf_counter() - detection_started) * 1000.0,
+            2,
+        )
 
         card_image = detection_result.get(
             "cardImage"
@@ -229,25 +238,19 @@ class OcrPipelineService:
             )
 
         # OCR chính chạy trên ảnh warped gốc.
+        initial_ocr_started = time.perf_counter()
         full_ocr_result = self.run_full_card_ocr(
             image_path=card_output_path,
         )
-
-        (
-            card_image,
-            enhanced_image,
-            full_ocr_result,
-            geometry_selection,
-        ) = self.select_best_geometry_candidate(
-            card_image=card_image,
-            enhanced_image=enhanced_image,
-            first_ocr_result=full_ocr_result,
-            detection_result=detection_result,
-            card_output_path=card_output_path,
-            enhanced_output_path=enhanced_output_path,
-            debug_dir=debug_dir,
+        stage_timings_ms["initialFullCardOcr"] = round(
+            (time.perf_counter() - initial_ocr_started) * 1000.0,
+            2,
         )
 
+        # Chuẩn hóa chiều ảnh chính trước. Nếu OCR hình học chạy khi thẻ đang
+        # úp ngược, mọi ứng viên đều có điểm thấp và pipeline phải OCR lại ba
+        # ảnh không cần thiết trước khi mới thử xoay 180 độ.
+        orientation_started = time.perf_counter()
         (
             card_image,
             enhanced_image,
@@ -261,7 +264,35 @@ class OcrPipelineService:
             debug_dir=debug_dir,
             first_ocr_result=full_ocr_result,
         )
+        stage_timings_ms["orientation"] = round(
+            (time.perf_counter() - orientation_started) * 1000.0,
+            2,
+        )
 
+        geometry_selection_started = time.perf_counter()
+        (
+            card_image,
+            enhanced_image,
+            full_ocr_result,
+            geometry_selection,
+        ) = self.select_best_geometry_candidate(
+            card_image=card_image,
+            enhanced_image=enhanced_image,
+            first_ocr_result=full_ocr_result,
+            detection_result=detection_result,
+            card_output_path=card_output_path,
+            enhanced_output_path=enhanced_output_path,
+            debug_dir=debug_dir,
+            content_rotation_degrees=int(
+                orientation_info.get("contentRotationDegrees", 0)
+            ),
+        )
+        stage_timings_ms["geometrySelection"] = round(
+            (time.perf_counter() - geometry_selection_started) * 1000.0,
+            2,
+        )
+
+        skew_started = time.perf_counter()
         (
             card_image,
             enhanced_image,
@@ -274,6 +305,10 @@ class OcrPipelineService:
             card_output_path=card_output_path,
             enhanced_output_path=enhanced_output_path,
             debug_dir=debug_dir,
+        )
+        stage_timings_ms["residualSkew"] = round(
+            (time.perf_counter() - skew_started) * 1000.0,
+            2,
         )
         orientation_info["geometrySelection"] = geometry_selection
         orientation_info["residualSkew"] = skew_info
@@ -295,12 +330,21 @@ class OcrPipelineService:
             dark_threshold=self.CROP_DARK_WARNING_THRESHOLD,
         )
 
+        # Ảnh warped gốc luôn là nguồn OCR chính. Chỉ thử ảnh enhanced cũ
+        # khi ảnh mờ/tối hoặc OCR chiều ảnh yếu; kết quả enhanced phải hơn
+        # ảnh gốc đủ biên mới được dùng. Không dùng adaptive variant để thay
+        # toàn bộ text box vì thay đổi nhỏ về confidence có thể làm Layout
+        # Parser mất nhãn và kéo theo mất nhiều trường.
+        enhancement_retry_started = time.perf_counter()
         full_ocr_variant = "card"
+        enhanced_ocr_retried = False
         if (
             cropped_quality["is_blurry"]
+            or cropped_quality["is_too_dark"]
             or float(orientation_info.get("selectedScore", 0.0))
             < self.ORIENTATION_RETRY_THRESHOLD + 3.0
         ):
+            enhanced_ocr_retried = True
             enhanced_ocr_result = self.run_full_card_ocr(
                 image_path=enhanced_output_path,
             )
@@ -310,6 +354,10 @@ class OcrPipelineService:
                     enhanced_result=enhanced_ocr_result,
                 )
             )
+        stage_timings_ms["qualityAndEnhancedRetry"] = round(
+            (time.perf_counter() - enhancement_retry_started) * 1000.0,
+            2,
+        )
 
         geometry_rotation = int(
             detection_result.get("geometry", {}).get(
@@ -331,11 +379,35 @@ class OcrPipelineService:
             ),
         )
         orientation_info["layoutYOffset"] = layout_y_offset
+        address_layout = estimate_address_crop_layout(
+            full_ocr_result.get("textBoxes", []),
+            image_size=(
+                int(card_image.shape[1]),
+                int(card_image.shape[0]),
+            ),
+        )
+        orientation_info["addressCropLayout"] = address_layout
+        field_layout = estimate_field_crop_layout(
+            full_ocr_result.get("textBoxes", []),
+            image_size=(
+                int(card_image.shape[1]),
+                int(card_image.shape[0]),
+            ),
+        )
+        orientation_info["fieldCropLayout"] = field_layout
 
+        field_ocr_started = time.perf_counter()
         field_ocr_result = self.run_field_ocr(
             card_image_path=card_output_path,
             field_output_dir=field_output_dir,
             layout_y_offset=layout_y_offset,
+            address_layout=address_layout,
+            field_layout=field_layout,
+            reference_data=full_ocr_result.get("structuredData", {}),
+        )
+        stage_timings_ms["fieldCropAndOcr"] = round(
+            (time.perf_counter() - field_ocr_started) * 1000.0,
+            2,
         )
 
         full_card_data = self.make_json_safe(
@@ -394,6 +466,7 @@ class OcrPipelineService:
 
         print("=" * 80)
 
+        fusion_started = time.perf_counter()
         merged_data, data_sources = fuse_ocr_data(
             full_card_data=full_card_data,
             field_data=field_data,
@@ -408,6 +481,10 @@ class OcrPipelineService:
 
         validation_result = self.validator.validate(
             merged_data
+        )
+        stage_timings_ms["fusionAndValidation"] = round(
+            (time.perf_counter() - fusion_started) * 1000.0,
+            2,
         )
 
         readability = self.evaluate_ocr_readability(
@@ -479,6 +556,7 @@ class OcrPipelineService:
             time.perf_counter() - start_time,
             3,
         )
+        stage_timings_ms["total"] = round(processing_time * 1000.0, 2)
 
         average_confidence = (
             self.calculate_average_confidence(
@@ -503,6 +581,21 @@ class OcrPipelineService:
                 "fieldResults",
                 {},
             )
+        )
+        field_ocr_attempt_count = sum(
+            int(item.get("attemptCount", 0) or 0)
+            for item in field_results.values()
+            if isinstance(item, dict)
+        )
+        full_card_ocr_attempt_count = (
+            1
+            + int(bool(orientation_info.get("orientationRetried")))
+            + max(
+                0,
+                len(geometry_selection.get("candidates", [])) - 1,
+            )
+            + len(skew_info.get("candidates", []))
+            + int(enhanced_ocr_retried)
         )
 
         field_debug = self.make_json_safe(
@@ -531,6 +624,9 @@ class OcrPipelineService:
             "metadata": {
                 "engine": "EasyOCR",
                 "processingTime": processing_time,
+                "processingStagesMs": stage_timings_ms,
+                "fullCardOcrAttemptCount": full_card_ocr_attempt_count,
+                "fieldOcrAttemptCount": field_ocr_attempt_count,
                 "averageConfidence": (
                     average_confidence
                 ),
@@ -708,6 +804,7 @@ class OcrPipelineService:
         card_output_path: Path,
         enhanced_output_path: Path,
         debug_dir: Path,
+        content_rotation_degrees: int = 0,
     ) -> tuple[Any, Any, dict[str, Any], dict[str, Any]]:
         """Thử các quad an toàn và chỉ nhận ứng viên có OCR tốt hơn."""
         primary_geometry = detection_result.get("geometry", {})
@@ -721,15 +818,44 @@ class OcrPipelineService:
         if not isinstance(candidates, list):
             candidates = []
 
+        source_coverage = float(
+            primary_geometry.get("sourceCoverageRatio", 0.0) or 0.0
+        )
+        perspective_severity = float(
+            primary_geometry.get("perspectiveSeverity", 0.0) or 0.0
+        )
+        whole_card_reliable = bool(
+            primary_geometry.get("wholeCardReliable")
+        )
+        first_candidate = candidates[0] if candidates else {}
+        first_candidate_geometry = (
+            first_candidate.get("geometry", {})
+            if isinstance(first_candidate, dict)
+            else {}
+        )
+        first_candidate_metrics = (
+            first_candidate_geometry.get("detectionMetrics", {})
+            if isinstance(first_candidate_geometry, dict)
+            else {}
+        )
+        has_verified_hough_candidate = bool(
+            isinstance(first_candidate_metrics, dict)
+            and first_candidate_metrics.get("wholeCardCandidate")
+        )
         retry_due_to_geometry = bool(
-            primary_geometry.get("fullFrameCandidateRecommended")
-            or float(primary_geometry.get("perspectiveSeverity", 0.0)) >= 0.10
+            not whole_card_reliable
+            and (
+                has_verified_hough_candidate
+                or source_coverage < 0.70
+                or perspective_severity >= 0.35
+            )
         )
         should_retry = bool(
             candidates
+            and retry_due_to_geometry
             and (
-                primary_score < self.GEOMETRY_RETRY_SCORE
-                or retry_due_to_geometry
+                has_verified_hough_candidate
+                or primary_score < self.GEOMETRY_RETRY_SCORE
             )
         )
         selection_info: dict[str, Any] = {
@@ -739,6 +865,14 @@ class OcrPipelineService:
             "selectedCandidate": primary_name,
             "selectedScore": primary_score,
             "selectionMargin": self.GEOMETRY_SELECTION_MARGIN,
+            "retryReason": (
+                "VERIFIED_WHOLE_CARD_CANDIDATE"
+                if should_retry and has_verified_hough_candidate
+                else "WEAK_OCR_AND_SUSPICIOUS_GEOMETRY"
+                if should_retry
+                else "PRIMARY_GEOMETRY_ACCEPTED"
+            ),
+            "maximumOcrCandidates": 1,
             "candidates": [
                 {
                     "name": primary_name,
@@ -767,12 +901,18 @@ class OcrPipelineService:
         best_score = primary_score
         best_geometry = primary_geometry
 
-        for index, candidate in enumerate(candidates[:3], start=1):
+        for index, candidate in enumerate(candidates[:1], start=1):
             if not isinstance(candidate, dict):
                 continue
-            candidate_card = candidate.get("cardImage")
-            if candidate_card is None:
+            raw_candidate_card = candidate.get("cardImage")
+            if raw_candidate_card is None:
                 continue
+            candidate_card = raw_candidate_card
+            if int(content_rotation_degrees) % 360 == 180:
+                candidate_card = cv2.rotate(
+                    raw_candidate_card,
+                    cv2.ROTATE_180,
+                )
             candidate_name = str(candidate.get("name", f"candidate_{index}"))
             candidate_path = (
                 debug_dir
@@ -1073,13 +1213,75 @@ class OcrPipelineService:
         card_result: dict[str, Any],
         enhanced_result: dict[str, Any],
     ) -> tuple[dict[str, Any], str]:
-        """Chọn ảnh gốc hoặc ảnh tăng cường bằng chất lượng OCR thực tế."""
+        """Chỉ chọn enhanced khi không làm mất bằng chứng của ảnh gốc."""
         card_score = self.score_full_ocr_result(card_result)
         enhanced_score = self.score_full_ocr_result(enhanced_result)
+
+        card_evidence = self.summarize_full_ocr_evidence(card_result)
+        enhanced_evidence = self.summarize_full_ocr_evidence(
+            enhanced_result
+        )
+
+        # Confidence/nhãn tăng nhẹ không được phép đổi lấy việc mất trường
+        # lõi hoặc mất nhiều dòng. Đây là nguyên nhân bản adaptive trước có
+        # thể chọn một ảnh trông "điểm cao" nhưng Layout Parser đọc kém hơn.
+        if (
+            enhanced_evidence["validCoreFields"]
+            < card_evidence["validCoreFields"]
+        ):
+            return card_result, "card"
+        if (
+            card_evidence["meaningfulLines"] >= 3
+            and enhanced_evidence["meaningfulLines"]
+            < card_evidence["meaningfulLines"]
+        ):
+            return card_result, "card"
 
         if enhanced_score > card_score + 0.75:
             return enhanced_result, "enhanced"
         return card_result, "card"
+
+    def summarize_full_ocr_evidence(
+        self,
+        ocr_result: dict[str, Any],
+    ) -> dict[str, int]:
+        """Đếm trường hợp lệ và dòng có nghĩa để chống chọn nhầm ảnh."""
+        structured = ocr_result.get("structuredData", {})
+        if not isinstance(structured, dict):
+            structured = {}
+        field_checks = (
+            self.validator.is_valid_id_number(
+                structured.get("idNumber")
+            ),
+            self.validator.is_valid_name(
+                structured.get("fullName")
+            ),
+            self.validator.is_valid_date(
+                structured.get("dateOfBirth")
+            ),
+            self.validator.is_valid_gender(
+                structured.get("gender")
+            ),
+            self.validator.is_valid_nationality(
+                structured.get("nationality")
+            ),
+        )
+        lines = ocr_result.get(
+            "normalizedText",
+            ocr_result.get("rawText", []),
+        )
+        if isinstance(lines, str):
+            lines = lines.splitlines()
+        if not isinstance(lines, list):
+            lines = []
+        meaningful_lines = sum(
+            bool(re.search(r"[A-Za-zÀ-ỹ0-9]{3}", str(line)))
+            for line in lines
+        )
+        return {
+            "validCoreFields": sum(bool(value) for value in field_checks),
+            "meaningfulLines": meaningful_lines,
+        }
 
     def evaluate_ocr_readability(
         self,
@@ -1313,6 +1515,9 @@ class OcrPipelineService:
         card_image_path: Path,
         field_output_dir: Path,
         layout_y_offset: float = 0.0,
+        address_layout: dict[str, Any] | None = None,
+        field_layout: dict[str, Any] | None = None,
+        reference_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Cắt và OCR từng field trên CCCD.
@@ -1328,6 +1533,9 @@ class OcrPipelineService:
                         field_output_dir
                     ),
                     layout_y_offset=layout_y_offset,
+                    address_layout=address_layout,
+                    field_layout=field_layout,
+                    reference_data=reference_data,
                 )
             )
 
