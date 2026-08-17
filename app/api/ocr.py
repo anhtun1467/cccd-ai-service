@@ -118,3 +118,21 @@ async def ocr_cccd(file: UploadFile = File(...)) -> ApiResponse:
         ),
         data=result,
     )
+from fastapi import File, UploadFile
+import numpy as np
+import cv2
+from app.services.naive_ocr_pipeline import NaiveOCRPipeline
+
+# Khởi tạo sẵn pipeline kém hiệu quả
+naive_pipeline = NaiveOCRPipeline()
+
+@router.post("/naive-extract")
+async def naive_extract_info(file: UploadFile = File(...)):
+    # Đọc file ảnh từ request do người dùng gửi lên
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    # Đẩy ảnh vào pipeline kém hiệu quả và lấy kết quả
+    result = naive_pipeline.process(image)
+    return result
