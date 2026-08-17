@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,12 @@ from app.modules.ocr.result_fuser import (
 )
 from app.modules.ocr.service import ocr_service
 from app.modules.ocr.validator import CCCDValidator
+from app.modules.qr.cccd_qr_decoder import CCCDQRDecoder
+from app.modules.qr.qr_ocr_fuser import (
+    build_qr_reference_data,
+    fuse_qr_data,
+    select_qr_field_ocr_skips,
+)
 from app.utils.image_validator import check_image_quality
 
 
@@ -37,6 +44,7 @@ class OcrPipelineService:
         -> Perspective Transform
         -> Enhancement
         -> OCR toàn thẻ
+        -> QR Fast Path
         -> OCR từng vùng
         -> Hợp nhất kết quả
         -> Validator
@@ -72,6 +80,9 @@ class OcrPipelineService:
         if getattr(self.field_ocr_service, "engine", None) is None:
             self.field_ocr_service.engine = self.ocr_service.engine
         self.validator = CCCDValidator()
+        self.qr_decoder = CCCDQRDecoder(
+            time_budget_ms=settings.qr_decode_budget_ms,
+        )
 
         self.line_merger = OCRLineMerger(
             vertical_tolerance_ratio=0.35,
@@ -359,6 +370,75 @@ class OcrPipelineService:
             2,
         )
 
+        # QR chạy trên ảnh thẻ cuối cùng đã nắn/xoay. Đây là fast path bổ
+        # sung, không phải điều kiện bắt buộc: QR mờ hoặc QR không thuộc
+        # CCCD sẽ bị bỏ qua và pipeline OCR cũ tiếp tục nguyên vẹn.
+        qr_started = time.perf_counter()
+        if settings.qr_fast_path_enabled:
+            try:
+                qr_result = self.qr_decoder.decode(card_image)
+            except Exception as error:
+                qr_result = {
+                    "decoded": False,
+                    "used": False,
+                    "decoder": "OpenCV QRCodeDetector",
+                    "attemptCount": 0,
+                    "selectedVariant": None,
+                    "elapsedMs": 0.0,
+                    "format": None,
+                    "fieldCount": 0,
+                    "providedFields": [],
+                    "structuredData": {},
+                    "auxiliaryData": {},
+                    "errors": [f"QR_FAST_PATH_ERROR:{error}"],
+                }
+        else:
+            qr_result = {
+                "decoded": False,
+                "used": False,
+                "decoder": "OpenCV QRCodeDetector",
+                "attemptCount": 0,
+                "selectedVariant": None,
+                "elapsedMs": 0.0,
+                "format": None,
+                "fieldCount": 0,
+                "providedFields": [],
+                "structuredData": {},
+                "auxiliaryData": {},
+                "errors": ["QR_FAST_PATH_DISABLED"],
+            }
+        stage_timings_ms["qrFastPath"] = round(
+            (time.perf_counter() - qr_started) * 1000.0,
+            2,
+        )
+        qr_data = self.make_json_safe(
+            qr_result.get("structuredData", {})
+        )
+        if not isinstance(qr_data, dict):
+            qr_data = {}
+
+        selected_full_card_data = self.make_json_safe(
+            full_ocr_result.get("structuredData", {})
+        )
+        if not isinstance(selected_full_card_data, dict):
+            selected_full_card_data = {}
+
+        qr_field_ocr_skips: set[str] = set()
+        if (
+            settings.qr_skip_confirmed_field_ocr
+            and qr_result.get("decoded")
+        ):
+            qr_field_ocr_skips = select_qr_field_ocr_skips(
+                qr_data=qr_data,
+                full_card_data=selected_full_card_data,
+                validator=self.validator,
+            )
+        field_reference_data = build_qr_reference_data(
+            full_card_data=selected_full_card_data,
+            qr_data=qr_data,
+            validator=self.validator,
+        )
+
         geometry_rotation = int(
             detection_result.get("geometry", {}).get(
                 "geometryRotationDegrees",
@@ -403,19 +483,15 @@ class OcrPipelineService:
             layout_y_offset=layout_y_offset,
             address_layout=address_layout,
             field_layout=field_layout,
-            reference_data=full_ocr_result.get("structuredData", {}),
+            reference_data=field_reference_data,
+            skip_fields=qr_field_ocr_skips,
         )
         stage_timings_ms["fieldCropAndOcr"] = round(
             (time.perf_counter() - field_ocr_started) * 1000.0,
             2,
         )
 
-        full_card_data = self.make_json_safe(
-            full_ocr_result.get(
-                "structuredData",
-                {},
-            )
-        )
+        full_card_data = selected_full_card_data
 
         field_data = self.make_json_safe(
             field_ocr_result.get(
@@ -479,9 +555,28 @@ class OcrPipelineService:
             ),
         )
 
+        merged_data, data_sources, qr_fusion = fuse_qr_data(
+            ocr_data=merged_data,
+            ocr_sources=data_sources,
+            qr_data=qr_data,
+            validator=self.validator,
+        )
+
         validation_result = self.validator.validate(
             merged_data
         )
+        qr_conflict_fields = [
+            str(item.get("field"))
+            for item in qr_fusion.get("conflicts", [])
+            if isinstance(item, dict) and item.get("field")
+        ]
+        if qr_conflict_fields:
+            validation_result["isValid"] = False
+            validation_result.setdefault("errors", []).append(
+                "Thông tin QR không khớp chữ in trên thẻ: "
+                + ", ".join(qr_conflict_fields)
+            )
+            validation_result["qrConflictFields"] = qr_conflict_fields
         stage_timings_ms["fusionAndValidation"] = round(
             (time.perf_counter() - fusion_started) * 1000.0,
             2,
@@ -532,6 +627,12 @@ class OcrPipelineService:
                     ),
                     "fieldConfidences": self.get_field_confidences(
                         field_ocr_result
+                    ),
+                    "dataSources": data_sources,
+                    "qrFastPath": self.public_qr_metadata(
+                        qr_result=qr_result,
+                        qr_fusion=qr_fusion,
+                        skipped_fields=qr_field_ocr_skips,
                     ),
                 },
             )
@@ -622,7 +723,11 @@ class OcrPipelineService:
             ),
             "cccdData": merged_data,
             "metadata": {
-                "engine": "EasyOCR",
+                "engine": (
+                    "EasyOCR + OpenCV QR"
+                    if qr_result.get("decoded")
+                    else "EasyOCR"
+                ),
                 "processingTime": processing_time,
                 "processingStagesMs": stage_timings_ms,
                 "fullCardOcrAttemptCount": full_card_ocr_attempt_count,
@@ -686,6 +791,11 @@ class OcrPipelineService:
                 "fieldData": field_data,
                 "dataSources": self.make_json_safe(
                     data_sources
+                ),
+                "qrFastPath": self.public_qr_metadata(
+                    qr_result=qr_result,
+                    qr_fusion=qr_fusion,
+                    skipped_fields=qr_field_ocr_skips,
                 ),
             },
             "portrait": portrait_result,
@@ -1518,6 +1628,7 @@ class OcrPipelineService:
         address_layout: dict[str, Any] | None = None,
         field_layout: dict[str, Any] | None = None,
         reference_data: dict[str, Any] | None = None,
+        skip_fields: Collection[str] | None = None,
     ) -> dict[str, Any]:
         """
         Cắt và OCR từng field trên CCCD.
@@ -1536,6 +1647,7 @@ class OcrPipelineService:
                     address_layout=address_layout,
                     field_layout=field_layout,
                     reference_data=reference_data,
+                    skip_fields=skip_fields,
                 )
             )
 
@@ -1789,6 +1901,63 @@ class OcrPipelineService:
 
         return confidences
 
+    def public_qr_metadata(
+        self,
+        qr_result: dict[str, Any],
+        qr_fusion: dict[str, Any],
+        skipped_fields: Collection[str],
+    ) -> dict[str, Any]:
+        """Trả metadata QR cần thiết mà không lặp lại payload chứa PII."""
+        conflicts = [
+            {
+                "field": str(item.get("field")),
+                "ocrSource": str(item.get("ocrSource", "NOT_FOUND")),
+                "resolution": str(item.get("resolution", "CCCD_QR")),
+                "requiresReview": bool(item.get("requiresReview", True)),
+            }
+            for item in qr_fusion.get("conflicts", [])
+            if isinstance(item, dict) and item.get("field")
+        ]
+        auxiliary = qr_result.get("auxiliaryData", {})
+        if not isinstance(auxiliary, dict):
+            auxiliary = {}
+        return self.make_json_safe(
+            {
+                "enabled": bool(settings.qr_fast_path_enabled),
+                "decoded": bool(qr_result.get("decoded")),
+                "used": bool(qr_fusion.get("used")),
+                "decoder": qr_result.get("decoder"),
+                "attemptCount": int(
+                    qr_result.get("attemptCount", 0) or 0
+                ),
+                "elapsedMs": float(qr_result.get("elapsedMs", 0.0) or 0.0),
+                "selectedVariant": qr_result.get("selectedVariant"),
+                "format": qr_result.get("format"),
+                "fieldCount": int(qr_result.get("fieldCount", 0) or 0),
+                "providedFields": list(
+                    qr_result.get("providedFields", []) or []
+                ),
+                "appliedFields": list(
+                    qr_fusion.get("appliedFields", []) or []
+                ),
+                "agreementFields": list(
+                    qr_fusion.get("agreementFields", []) or []
+                ),
+                "conflicts": conflicts,
+                "skippedFieldOcr": sorted(
+                    str(field_name) for field_name in skipped_fields
+                ),
+                "hasOldDocumentNumber": bool(
+                    auxiliary.get("hasOldDocumentNumber")
+                ),
+                "hasDateOfIssue": bool(auxiliary.get("hasDateOfIssue")),
+                "additionalFieldCount": int(
+                    auxiliary.get("additionalFieldCount", 0) or 0
+                ),
+                "errors": list(qr_result.get("errors", []) or []),
+            }
+        )
+
     @staticmethod
     def calculate_average_confidence(
         text_boxes: list[dict[str, Any]],
@@ -1948,6 +2117,12 @@ class OcrPipelineService:
             response["metadata"]["rejection"] = self.make_json_safe(
                 rejection
             )
+
+        for metadata_key in ("dataSources", "qrFastPath"):
+            if metadata_key in partial:
+                response["metadata"][metadata_key] = self.make_json_safe(
+                    partial.get(metadata_key)
+                )
 
         if image_file is not None:
             json_output_dir = (

@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     output_dir: str = "storage/outputs"
     max_upload_size_mb: int = 10
 
+    # QR Fast Path - thử đọc QR trên vùng thẻ đã được làm phẳng trước khi
+    # OCR từng trường. Thời gian này chỉ là ngân sách mềm: OpenCV không hỗ
+    # trợ hủy một lần detectAndDecode đang chạy giữa chừng.
+    qr_fast_path_enabled: bool = True
+    qr_decode_budget_ms: float = 120.0
+    qr_skip_confirmed_field_ocr: bool = True
+
     # Face Verification - InsightFace buffalo_l / ArcFace 512-D.
     face_model_name: str = "buffalo_l"
     face_execution_provider: str = "CPUExecutionProvider"

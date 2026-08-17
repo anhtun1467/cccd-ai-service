@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Collection
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -126,6 +127,7 @@ class FieldOCRService:
         address_layout: dict[str, Any] | None = None,
         field_layout: dict[str, Any] | None = None,
         reference_data: dict[str, Any] | None = None,
+        skip_fields: Collection[str] | None = None,
     ) -> dict[str, Any]:
         """
         Cắt ảnh CCCD và OCR từng trường riêng biệt.
@@ -166,9 +168,46 @@ class FieldOCRService:
         }
 
         field_ocr_results: dict[str, dict[str, Any]] = {}
+        skipped_fields = {
+            str(field_name)
+            for field_name in (skip_fields or ())
+            if str(field_name) in self.OCR_FIELDS
+        }
 
         for field_name in self.OCR_FIELDS:
             field_result = field_results.get(field_name)
+
+            if field_name in skipped_fields:
+                field_result = field_result or {}
+                field_ocr_results[field_name] = {
+                    "fieldName": field_name,
+                    "success": True,
+                    "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+                    "rawText": [],
+                    "normalizedText": [],
+                    "joinedText": "",
+                    "value": None,
+                    # Đây không phải confidence của OCR nên không giả lập
+                    # thành 1.0; nguồn tin cậy được thể hiện ở dataSources.
+                    "averageConfidence": 0.0,
+                    "ocrVariant": None,
+                    "ocrCandidates": [],
+                    "imagePath": field_result.get("imagePath"),
+                    "rawImagePath": field_result.get("rawImagePath"),
+                    "box": field_result.get("box"),
+                    "rawWidth": field_result.get("rawWidth"),
+                    "rawHeight": field_result.get("rawHeight"),
+                    "processedWidth": field_result.get("processedWidth"),
+                    "processedHeight": field_result.get("processedHeight"),
+                    "attemptCount": 0,
+                    "referenceAgreement": True,
+                    "retryErrors": [],
+                    "glyphMatch": None,
+                    "skipped": True,
+                    "skipReason": "CCCD_QR_FAST_PATH",
+                    "qrValidated": True,
+                }
+                continue
 
             if not field_result:
                 field_ocr_results[field_name] = (
@@ -344,11 +383,14 @@ class FieldOCRService:
             field_results.get("portrait")
         )
 
+        debug_info = dict(field_results.get("_debug") or {})
+        debug_info["skippedOcrFields"] = sorted(skipped_fields)
+
         return {
             "structuredData": structured_data,
             "fieldResults": field_ocr_results,
             "portrait": portrait_result,
-            "debug": field_results.get("_debug"),
+            "debug": debug_info,
         }
 
     def extract_normalized_lines(
