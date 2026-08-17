@@ -24,6 +24,7 @@ class ContourDetector:
         padding: int = 55,
         multi_card_min_area_ratio: float = 0.12,
         multi_card_min_rectangularity: float = 0.68,
+        tiled_card_min_foreground_coverage: float = 0.55,
     ):
         self.max_contours = max_contours
         self.epsilon_factor = epsilon_factor
@@ -33,6 +34,10 @@ class ContourDetector:
         self.padding = padding
         self.multi_card_min_area_ratio = multi_card_min_area_ratio
         self.multi_card_min_rectangularity = multi_card_min_rectangularity
+        self.tiled_card_min_foreground_coverage = max(
+            0.0,
+            min(float(tiled_card_min_foreground_coverage), 1.0),
+        )
 
     def build_card_mask(self, resized_image: np.ndarray) -> np.ndarray:
         gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
@@ -216,8 +221,31 @@ class ContourDetector:
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        foreground_mask = self.build_multi_card_mask(image)
         margin_y = max(1, int(round(height * 0.05)))
         margin_x = max(1, int(round(width * 0.05)))
+
+        def has_card_foreground(
+            x1: int,
+            y1: int,
+            x2: int,
+            y2: int,
+        ) -> bool:
+            """Mỗi ô phải thực sự chứa gần trọn một thẻ sáng.
+
+            Ảnh dọc của *một* CCCD ngang có thể có một hàng chữ tối gần
+            giữa khung. Chỉ dựa vào hàng tối đó sẽ chia nhầm nửa trên và
+            nửa dưới thành hai CCCD. Hai nửa ấy chủ yếu là nền, nên tỷ lệ
+            foreground thấp hơn rõ rệt so với hai thẻ thật đặt kề nhau.
+            """
+            region = foreground_mask[
+                max(0, y1):min(height, y2),
+                max(0, x1):min(width, x2),
+            ]
+            if region.size == 0:
+                return False
+            coverage = float(np.mean(region > 0))
+            return coverage >= self.tiled_card_min_foreground_coverage
 
         def valid_card_ratio(first_edge: int, second_edge: int) -> bool:
             short_edge = min(first_edge, second_edge)
@@ -245,6 +273,8 @@ class ContourDetector:
                 and min(left_width, right_width) >= width * 0.30
                 and valid_card_ratio(height, left_width)
                 and valid_card_ratio(height, right_width)
+                and has_card_foreground(0, 0, split_x, height)
+                and has_card_foreground(split_x, 0, width, height)
             ):
                 gap = max(1, int(round(width * 0.002)))
                 return [
@@ -279,6 +309,8 @@ class ContourDetector:
                 and min(top_height, bottom_height) >= height * 0.30
                 and valid_card_ratio(width, top_height)
                 and valid_card_ratio(width, bottom_height)
+                and has_card_foreground(0, 0, width, split_y)
+                and has_card_foreground(0, split_y, width, height)
             ):
                 gap = max(1, int(round(height * 0.002)))
                 return [
@@ -1024,11 +1056,21 @@ class ContourDetector:
                 primary_metrics = dict(metrics)
 
         primary_edge_score = float(primary_metrics.get("score") or 0.0)
+        primary_grid_coverage = float(
+            primary_metrics.get("contentGridCoverage") or 0.0
+        )
+        primary_boundary_reliable = bool(
+            primary_edge_score >= 7.10
+            and primary_grid_coverage >= 0.75
+        )
         contour_is_complete = bool(
             contour_quad is not None
             and (
                 primary_edge_touches == 0
-                or primary_area_ratio >= 0.70
+                or (
+                    primary_area_ratio >= 0.70
+                    and primary_boundary_reliable
+                )
                 or (
                     primary_edge_touches <= 1
                     and primary_edge_score >= 8.40
@@ -1064,6 +1106,7 @@ class ContourDetector:
 
         primary = contour_quad
         method = "brightness_contour"
+        contour_replacement: dict[str, object] | None = None
         if hough_candidates:
             best_hough = hough_candidates[0]
             hough_corners = np.asarray(
@@ -1083,6 +1126,80 @@ class ContourDetector:
                 )
                 primary_edge_touches = edge_touch_count(hough_corners)
                 mask = edge_map
+            else:
+                ordered_contour = self._order_quadrilateral(contour_quad)
+                ordered_hough = self._order_quadrilateral(hough_corners)
+                contour_area = max(
+                    abs(float(cv2.contourArea(ordered_contour))),
+                    1.0,
+                )
+                hough_area = abs(float(cv2.contourArea(ordered_hough)))
+                relative_area = hough_area / contour_area
+                intersection_area, _ = cv2.intersectConvexConvex(
+                    ordered_contour.astype(np.float32),
+                    ordered_hough.astype(np.float32),
+                )
+                overlap = float(intersection_area) / max(hough_area, 1.0)
+                center_distance = float(np.linalg.norm(
+                    ordered_hough.mean(axis=0)
+                    - ordered_contour.mean(axis=0)
+                )) / diagonal
+                hough_score = float(best_hough.get("score") or 0.0)
+                hough_grid_coverage = float(
+                    best_hough.get("contentGridCoverage") or 0.0
+                )
+                hough_aspect = float(
+                    best_hough.get("aspectRatio") or 0.0
+                )
+                target_aspect = 85.60 / 53.98
+                hough_aspect_error = abs(
+                    hough_aspect - target_aspect
+                ) / target_aspect
+
+                # Contour Otsu đôi khi dính CCCD với tay, điện thoại hoặc
+                # nền sáng và bao gần hết khung. Nếu một quad Hough nằm
+                # trong contour đó, có đủ nội dung toàn thẻ và mạnh hơn rõ
+                # rệt, dùng quad Hough làm nguồn chính. Giới hạn diện tích
+                # 18% loại QR, chân dung và các khối chữ nội bộ.
+                replace_contour = bool(
+                    not contour_is_complete
+                    and 0.18 <= relative_area <= 1.20
+                    and overlap >= 0.82
+                    and center_distance <= 0.28
+                    and hough_grid_coverage >= 0.83
+                    and hough_aspect_error <= 0.20
+                    and hough_score >= max(7.10, primary_edge_score + 1.25)
+                )
+                if replace_contour:
+                    primary = hough_corners
+                    method = "hough_quadrilateral"
+                    primary_metrics = {
+                        key: value
+                        for key, value in best_hough.items()
+                        if key != "corners"
+                    }
+                    primary_area_ratio = float(
+                        best_hough.get("areaRatio")
+                        or area_ratio(hough_corners)
+                    )
+                    primary_edge_touches = edge_touch_count(hough_corners)
+                    mask = edge_map
+                    contour_replacement = {
+                        "reason": "SUSPICIOUS_BRIGHTNESS_CONTOUR",
+                        "originalAreaRatio": round(
+                            area_ratio(contour_quad),
+                            4,
+                        ),
+                        "replacementAreaRatio": round(
+                            primary_area_ratio,
+                            4,
+                        ),
+                        "relativeArea": round(relative_area, 4),
+                        "overlapWithContour": round(overlap, 4),
+                        "centerDistance": round(center_distance, 4),
+                        "originalScore": round(primary_edge_score, 4),
+                        "replacementScore": round(hough_score, 4),
+                    }
 
         assert primary is not None
         alternates: list[dict[str, object]] = []
@@ -1166,6 +1283,7 @@ class ContourDetector:
             "wholeCardReliable": whole_card_reliable,
             "houghFallbackEvaluated": not contour_is_complete,
             "houghSkippedReason": hough_skipped_reason,
+            "contourReplacement": contour_replacement,
             "alternateCandidates": alternates[:1],
         }
 

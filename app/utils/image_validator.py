@@ -6,6 +6,11 @@ import cv2
 import numpy as np
 
 
+# Chỉ chặn ở cửa API khi khung hình gần như đen. Ảnh thiếu sáng nhưng còn
+# dữ liệu được chuyển tiếp cho CardDetector và bộ tăng cường thích ứng.
+INPUT_HARD_DARK_THRESHOLD = 15.0
+
+
 def _invalid_result(reason: str, error_code: str) -> dict[str, Any]:
     return {
         "is_valid": False,

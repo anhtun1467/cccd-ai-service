@@ -187,16 +187,15 @@ def test_hough_refinement_uses_opposite_normals_for_full_card_edges() -> None:
     for y_value in range(355, 580, 32):
         cv2.line(image, (185, y_value), (460, y_value), (40, 50, 50), 2)
 
-    _, _, _, metadata = (
+    primary, _, _, metadata = (
         ContourDetector().find_card_contour_candidates_from_image(image)
     )
-    alternates = metadata["alternateCandidates"]
 
-    assert len(alternates) == 1
-    candidate = alternates[0]
-    assert candidate["name"].startswith("hough_whole_card_")
-    assert candidate["detection"]["relativeToPrimaryArea"] > 0.65
-    assert candidate["detection"]["overlapWithPrimary"] > 0.95
-    actual = ContourDetector._order_quadrilateral(candidate["corners"])
+    assert metadata["detectionMethod"] == "hough_quadrilateral"
+    replacement = metadata["contourReplacement"]
+    assert replacement["reason"] == "SUSPICIOUS_BRIGHTNESS_CONTOUR"
+    assert replacement["relativeArea"] > 0.65
+    assert replacement["overlapWithContour"] > 0.95
+    actual = ContourDetector._order_quadrilateral(primary)
     target = ContourDetector._order_quadrilateral(expected)
     assert float(np.mean(np.linalg.norm(actual - target, axis=1))) < 8.0

@@ -150,3 +150,19 @@ def test_single_landscape_card_is_not_reported_as_two_cards() -> None:
     cv2.rectangle(image, (20, 180), (260, 520), (80, 80, 80), 3)
 
     assert detector.find_tiled_card_regions(image) == []
+
+
+def test_single_card_in_portrait_photo_is_not_split_into_top_and_bottom() -> None:
+    detector = ContourDetector()
+    image = np.full((700, 525, 3), 28, dtype=np.uint8)
+    cv2.rectangle(image, (14, 205), (495, 512), (205, 220, 205), -1)
+    cv2.rectangle(image, (14, 205), (495, 512), (40, 75, 65), 4)
+    # Một hàng tối ở giữa thẻ từng bị fallback coi là khe giữa hai CCCD.
+    cv2.line(image, (20, 350), (489, 350), (20, 20, 20), 7)
+    cv2.rectangle(image, (25, 646), (250, 699), (185, 185, 180), -1)
+
+    tiled = detector.find_tiled_card_regions(image)
+    multiple, _ = detector.find_multiple_card_contours_from_image(image)
+
+    assert tiled == []
+    assert len(multiple) < 2
