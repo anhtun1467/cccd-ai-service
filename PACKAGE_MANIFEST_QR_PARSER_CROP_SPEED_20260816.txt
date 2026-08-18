@@ -1,0 +1,45 @@
+CCCD QR / PARSER / CROP / SPEED OPTIMIZATION - 2026-08-16
+
+Archive
+=======
+cccd_qr_parser_crop_speed_optimized_20260816.zip
+
+Install target
+==============
+Extract at the project root containing app/, tests/ and requirements.txt.
+This package is cumulative over cccd_qr_parser_diagnostics_fix_20260816.zip.
+
+Main changes
+============
+- Multi-variant ZXing QR decoding on full card and both valid QR corners.
+- QR-based 180-degree orientation before the first EasyOCR call.
+- Large, clipped foreground-card fallback that cannot be replaced by an
+  internal Hough text strip.
+- Preliminary OCR fusion as field reference and earlier retry termination.
+- QR residence differences are advisory; critical identity conflicts still
+  require review.
+- Image-quality decisions are independent from parser/validation status.
+- Separate parser-field and parser-value overlays with the detected QR.
+
+Verification
+============
+- 208 passed, 1 skipped.
+- Captured QR regression: 20/20 upright and 20/20 rotated 180 degrees.
+- No uploaded CCCD image, request JSON, raw QR payload, storage output,
+  __pycache__ or test cache is included.
+
+Primary runtime files
+=====================
+- app/modules/card_detection/
+- app/modules/ocr/
+- app/modules/qr/
+- app/services/ocr_pipeline.py
+- app/api/ocr.py
+- app/core/config.py
+- app/utils/image_validator.py
+- app/utils/ocr_error_detail.py
+- requirements.txt
+
+Documentation
+=============
+- HUONG_DAN_TOI_UU_QR_PARSER_CROP_TOC_DO_20260816.md

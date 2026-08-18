@@ -53,3 +53,9 @@ def test_random_or_malformed_qr_is_not_accepted_as_cccd() -> None:
     assert invalid_id["success"] is False
     assert invalid_id["structuredData"] == {}
     assert "QR_ID_NUMBER_INVALID" in invalid_id["errors"]
+    assert "idNumber" in invalid_id["missingRequiredFields"]
+    assert any(
+        item["code"] == "QR_ID_NUMBER_INVALID"
+        and item["stage"] == "parse"
+        for item in invalid_id["errorDetails"]
+    )

@@ -12,7 +12,11 @@ from app.services.face_session_store import (
 from app.services.ocr_pipeline import ocr_pipeline_service
 from app.utils.file_utils import save_upload_file
 
-from app.utils.image_validator import check_image_quality
+from app.utils.image_validator import (
+    INPUT_HARD_DARK_THRESHOLD,
+    check_image_quality,
+)
+from app.utils.ocr_error_detail import build_ocr_error_detail
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 
@@ -37,21 +41,24 @@ async def ocr_cccd(file: UploadFile = File(...)) -> ApiResponse:
     quality = check_image_quality(
         img,
         blur_threshold=0.0,
-        dark_threshold=60.0,
+        dark_threshold=INPUT_HARD_DARK_THRESHOLD,
     )
     print(f"\n[TASK 9 - KIỂM DUYỆT ẢNH] Blur: {quality['blur_score']:.2f} | Sáng: {quality['brightness_score']:.2f}")
 
-    # 4. Ở đầu vào chỉ chặn ảnh thiếu sáng rõ rệt. Độ mờ được hoãn quyết
-    # định đến sau OCR để tránh loại nhầm ảnh hơi mờ nhưng vẫn đọc được.
+    # 4. Ở đầu vào chỉ chặn khung gần như đen. Ảnh tối/mờ còn dữ liệu được
+    # cân sáng, khử mờ và đánh giá bằng chính kết quả OCR sau khi cắt thẻ.
     if not quality["is_valid"]:
         raise HTTPException(
             status_code=400,
             detail={
-                "message": "Hình ảnh CCCD không đạt yêu cầu.",
+                "message": quality["reason"],
                 "error_code": quality["error_code"],
+                "stage": "INPUT_QUALITY",
                 "reason": quality["reason"],
-                "blur_score": quality["blur_score"],
-                "brightness_score": quality["brightness_score"],
+                "image_quality": {
+                    "blurScore": quality["blur_score"],
+                    "brightnessScore": quality["brightness_score"],
+                },
                 "suggestion": quality["suggestion"],
             },
         )
@@ -66,28 +73,9 @@ async def ocr_cccd(file: UploadFile = File(...)) -> ApiResponse:
     )
 
     if result.get("status") == "OCR_FAILED":
-        metadata = result.get("metadata", {})
-        rejection = metadata.get("rejection", {})
         raise HTTPException(
             status_code=400,
-            detail={
-                "message": "Hình ảnh CCCD không đạt yêu cầu.",
-                "error_code": rejection.get(
-                    "errorCode",
-                    "OCR_FAILED",
-                ),
-                "reason": rejection.get(
-                    "reason",
-                    result.get("message", "OCR CCCD thất bại"),
-                ),
-                "blur_score": rejection.get("blurScore"),
-                "brightness_score": rejection.get("brightnessScore"),
-                "card_count": rejection.get("cardCount"),
-                "suggestion": rejection.get(
-                    "suggestion",
-                    "Vui lòng chụp lại một CCCD rõ nét và đủ sáng.",
-                ),
-            },
+            detail=build_ocr_error_detail(result),
         )
 
     # Tạo phiên server-side liên kết tới cardImage/portrait vừa được OCR tạo.

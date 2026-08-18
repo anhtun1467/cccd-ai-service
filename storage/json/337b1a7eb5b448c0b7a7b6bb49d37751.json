@@ -1,0 +1,2745 @@
+{
+    "status": "OCR_SUCCESS",
+    "message": "OCR CCCD thành công",
+    "cccdData": {
+        "idNumber": "001094027603",
+        "fullName": "Hoàng Quốc Phong",
+        "dateOfBirth": "26/07/1994",
+        "gender": "Nam",
+        "nationality": "Việt Nam",
+        "placeOfOrigin": "Pece d ongin, Cl",
+        "placeOfResidence": "76 Tổ 27, Phương Liên, Đống Đa, Hà Nội",
+        "dateOfExpiry": "26/07/2034"
+    },
+    "metadata": {
+        "engine": "EasyOCR + ZXing-C++/OpenCV QR",
+        "processingTime": 8.737,
+        "processingStagesMs": {
+            "cardDetection": 51.49,
+            "qrOrientationProbe": 4.23,
+            "initialFullCardOcr": 4457.95,
+            "orientation": 4.56,
+            "geometrySelection": 5.56,
+            "residualSkew": 54.97,
+            "qualityAndEnhancedRetry": 0.01,
+            "qrFastPath": 4.23,
+            "cardSideClassification": 0.63,
+            "fieldCropAndOcr": 3858.21,
+            "fusionAndValidation": 151.06,
+            "total": 8737.0
+        },
+        "fullCardOcrAttemptCount": 1,
+        "fieldOcrAttemptCount": 7,
+        "averageConfidence": 0.5159,
+        "imageQuality": {
+            "blurScore": 321.61,
+            "blurLevel": "SHARP",
+            "cropBlurScore": 321.61,
+            "brightnessScore": 164.92,
+            "decision": "PASSED",
+            "warnings": [],
+            "readableCoreFields": [
+                "idNumber",
+                "fullName",
+                "dateOfBirth",
+                "gender",
+                "nationality"
+            ]
+        },
+        "fieldConfidences": {
+            "idNumber": 0.0,
+            "fullName": 0.0,
+            "dateOfBirth": 0.0,
+            "gender": 0.0,
+            "nationality": 0.515,
+            "placeOfOrigin": 0.124,
+            "placeOfResidence": 0.0,
+            "dateOfExpiry": 0.337
+        },
+        "validation": {
+            "isValid": true,
+            "errors": [],
+            "fieldValidity": {
+                "idNumber": true,
+                "fullName": true,
+                "dateOfBirth": true,
+                "gender": true,
+                "nationality": true,
+                "placeOfOrigin": true,
+                "placeOfResidence": true,
+                "dateOfExpiry": true
+            }
+        },
+        "parserDiagnostics": {
+            "status": "COMPLETE",
+            "fields": {
+                "idNumber": {
+                    "present": true,
+                    "valid": true,
+                    "source": "CCCD_QR",
+                    "confidence": 0.0
+                },
+                "fullName": {
+                    "present": true,
+                    "valid": true,
+                    "source": "CCCD_QR",
+                    "confidence": 0.0
+                },
+                "dateOfBirth": {
+                    "present": true,
+                    "valid": true,
+                    "source": "CCCD_QR",
+                    "confidence": 0.0
+                },
+                "gender": {
+                    "present": true,
+                    "valid": true,
+                    "source": "CCCD_QR",
+                    "confidence": 0.0
+                },
+                "nationality": {
+                    "present": true,
+                    "valid": true,
+                    "source": "FULL_CARD_OCR",
+                    "confidence": 0.515
+                },
+                "placeOfOrigin": {
+                    "present": true,
+                    "valid": true,
+                    "source": "FIELD_OCR",
+                    "confidence": 0.124
+                },
+                "placeOfResidence": {
+                    "present": true,
+                    "valid": true,
+                    "source": "CCCD_QR",
+                    "confidence": 0.0
+                },
+                "dateOfExpiry": {
+                    "present": true,
+                    "valid": true,
+                    "source": "RAW_TEXT_RECOVERY",
+                    "confidence": 0.337
+                }
+            },
+            "validFields": [
+                "idNumber",
+                "fullName",
+                "dateOfBirth",
+                "gender",
+                "nationality",
+                "placeOfOrigin",
+                "placeOfResidence",
+                "dateOfExpiry"
+            ],
+            "missingFields": [],
+            "invalidFields": [],
+            "errors": [],
+            "cardSide": {
+                "side": "FRONT",
+                "confidence": 0.95,
+                "frontScore": 8.0,
+                "backScore": 0.0,
+                "frontEvidence": [
+                    "CITIZEN_IDENTITY_TITLE",
+                    "FULL_NAME_LABEL",
+                    "DATE_OF_BIRTH_LABEL",
+                    "GENDER_LABEL"
+                ],
+                "backEvidence": []
+            },
+            "qrStatus": "DECODED_VALID",
+            "qrRegionDetected": true,
+            "qrDecoded": true
+        },
+        "cardSide": {
+            "side": "FRONT",
+            "confidence": 0.95,
+            "frontScore": 8.0,
+            "backScore": 0.0,
+            "frontEvidence": [
+                "CITIZEN_IDENTITY_TITLE",
+                "FULL_NAME_LABEL",
+                "DATE_OF_BIRTH_LABEL",
+                "GENDER_LABEL"
+            ],
+            "backEvidence": []
+        },
+        "reviewRequired": false,
+        "inputImage": "storage\\uploads\\337b1a7eb5b448c0b7a7b6bb49d37751.jpg",
+        "cardImage": "storage\\outputs\\337b1a7eb5b448c0b7a7b6bb49d37751_card.jpg",
+        "enhancedImage": "storage\\outputs\\337b1a7eb5b448c0b7a7b6bb49d37751_enhanced.jpg",
+        "debugDir": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751",
+        "jsonOutput": "storage\\json\\337b1a7eb5b448c0b7a7b6bb49d37751.json",
+        "fieldDebug": {
+            "sourceImagePath": "storage\\outputs\\337b1a7eb5b448c0b7a7b6bb49d37751_card.jpg",
+            "normalizedImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\00_normalized_card.jpg",
+            "debugImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fields_debug.jpg",
+            "valueDebugImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fields_value_debug.jpg",
+            "imageWidth": 1000,
+            "imageHeight": 630,
+            "layoutYOffset": -7.4,
+            "addressLayout": {
+                "boundaryY": 511.73,
+                "source": "residence_label",
+                "layoutYOffset": -7.4,
+                "labelAnchors": {
+                    "placeOfResidence": {
+                        "top": 513.73,
+                        "bottom": 561.5,
+                        "center": 537.62
+                    }
+                }
+            },
+            "fieldLayout": {
+                "source": "label_anchors",
+                "layoutYOffset": -7.4,
+                "boundaryY": 512,
+                "labelAnchors": {
+                    "idNumber": {
+                        "left": 299.64,
+                        "top": 269.48,
+                        "right": 397.11,
+                        "bottom": 301.93,
+                        "center": 285.71
+                    },
+                    "fullName": {
+                        "left": 299.64,
+                        "top": 309.14,
+                        "right": 534.3,
+                        "bottom": 346.09,
+                        "center": 327.62
+                    },
+                    "dateOfBirth": {
+                        "left": 300.54,
+                        "top": 378.54,
+                        "right": 564.98,
+                        "bottom": 421.8,
+                        "center": 400.17
+                    },
+                    "gender": {
+                        "left": 299.64,
+                        "top": 401.97,
+                        "right": 940.43,
+                        "bottom": 459.66,
+                        "center": 430.82
+                    },
+                    "nationality": {
+                        "left": 299.64,
+                        "top": 401.97,
+                        "right": 940.43,
+                        "bottom": 459.66,
+                        "center": 430.82
+                    },
+                    "placeOfResidence": {
+                        "left": 299.64,
+                        "top": 513.73,
+                        "right": 805.05,
+                        "bottom": 561.5,
+                        "center": 537.62
+                    }
+                },
+                "regions": {
+                    "idNumber": {
+                        "field": {
+                            "x1": 255,
+                            "y1": 253,
+                            "x2": 930,
+                            "y2": 306
+                        },
+                        "value": {
+                            "x1": 330,
+                            "y1": 262,
+                            "x2": 850,
+                            "y2": 306
+                        }
+                    },
+                    "fullName": {
+                        "field": {
+                            "x1": 270,
+                            "y1": 306,
+                            "x2": 975,
+                            "y2": 376
+                        },
+                        "value": {
+                            "x1": 270,
+                            "y1": 306,
+                            "x2": 985,
+                            "y2": 376
+                        }
+                    },
+                    "dateOfBirth": {
+                        "field": {
+                            "x1": 270,
+                            "y1": 376,
+                            "x2": 900,
+                            "y2": 400
+                        },
+                        "value": {
+                            "x1": 500,
+                            "y1": 376,
+                            "x2": 860,
+                            "y2": 400
+                        }
+                    },
+                    "gender": {
+                        "field": {
+                            "x1": 270,
+                            "y1": 400,
+                            "x2": 650,
+                            "y2": 460
+                        },
+                        "value": {
+                            "x1": 400,
+                            "y1": 400,
+                            "x2": 625,
+                            "y2": 460
+                        }
+                    },
+                    "nationality": {
+                        "field": {
+                            "x1": 620,
+                            "y1": 400,
+                            "x2": 995,
+                            "y2": 460
+                        },
+                        "value": {
+                            "x1": 730,
+                            "y1": 400,
+                            "x2": 1000,
+                            "y2": 460
+                        }
+                    },
+                    "placeOfOrigin": {
+                        "field": {
+                            "x1": 300,
+                            "y1": 460,
+                            "x2": 995,
+                            "y2": 512
+                        },
+                        "value": {
+                            "x1": 300,
+                            "y1": 460,
+                            "x2": 1000,
+                            "y2": 512
+                        }
+                    },
+                    "placeOfResidence": {
+                        "field": {
+                            "x1": 300,
+                            "y1": 512,
+                            "x2": 995,
+                            "y2": 630
+                        },
+                        "value": {
+                            "x1": 300,
+                            "y1": 512,
+                            "x2": 1000,
+                            "y2": 630
+                        }
+                    },
+                    "dateOfExpiry": {
+                        "field": {
+                            "x1": 0,
+                            "y1": 508,
+                            "x2": 345,
+                            "y2": 630
+                        },
+                        "value": {
+                            "x1": 15,
+                            "y1": 513,
+                            "x2": 345,
+                            "y2": 630
+                        }
+                    },
+                    "qrCode": {
+                        "field": {
+                            "x1": 803,
+                            "y1": 33,
+                            "x2": 929,
+                            "y2": 162
+                        },
+                        "value": {
+                            "x1": 803,
+                            "y1": 33,
+                            "x2": 929,
+                            "y2": 162
+                        },
+                        "detected": true,
+                        "decoded": true,
+                        "source": "QR_DETECTOR"
+                    }
+                }
+            },
+            "skippedOcrFields": [
+                "dateOfBirth",
+                "fullName",
+                "gender",
+                "idNumber",
+                "placeOfResidence"
+            ],
+            "parserQrOverlay": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fields_parser_qr_debug.jpg",
+            "parserValueQrOverlay": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fields_values_parser_qr_debug.jpg"
+        },
+        "geometry": {
+            "perspectiveApplied": true,
+            "candidateName": "perspective_contour",
+            "sourceCorners": [
+                [
+                    131.94163513183594,
+                    79.08770751953125
+                ],
+                [
+                    1125.7635498046875,
+                    68.52286529541016
+                ],
+                [
+                    1208.2296142578125,
+                    716.9743041992188
+                ],
+                [
+                    100.22391510009766,
+                    695.0188598632812
+                ]
+            ],
+            "outputWidth": 1108,
+            "outputHeight": 699,
+            "geometryRotationDegrees": 0,
+            "targetAspectRatio": 1.585773,
+            "perspectiveMatrix": [
+                [
+                    1.1944834966586602,
+                    0.061510597386389324,
+                    -162.46683782258293
+                ],
+                [
+                    0.013676127121218443,
+                    1.2864967173751989,
+                    -103.55052668325119
+                ],
+                [
+                    5.242715941647753e-05,
+                    0.00018612185249473705,
+                    1.0
+                ]
+            ],
+            "sourceCoverageRatio": 0.7227,
+            "sourceBoundingCoverageRatio": 0.7831,
+            "sourceMeasuredAspectRatio": 1.6546,
+            "oppositeWidthRatio": 1.115,
+            "oppositeHeightRatio": 1.0599,
+            "perspectiveSeverity": 0.1089,
+            "frameCornerDeviation": 0.0843,
+            "edgeTouchCount": 1,
+            "sourceBoundingBox": [
+                100,
+                68,
+                1109,
+                649
+            ],
+            "detectionMethod": "brightness_contour",
+            "detectionScore": 7.3331,
+            "detectionMetrics": {
+                "score": 7.3331,
+                "areaRatio": 0.7227,
+                "aspectRatio": 1.6535,
+                "oppositeBalance": 0.8462,
+                "edgeSupportMean": 0.3343,
+                "edgeSupportMinimum": 0.113,
+                "interiorEdgeDensity": 0.0577,
+                "contentGridCoverage": 0.9167,
+                "contentRowMinimum": 0.093,
+                "contentColumnMinimum": 0.0519,
+                "edgeSupports": [
+                    0.5227,
+                    0.113,
+                    0.2806,
+                    0.421
+                ]
+            },
+            "primaryAreaRatio": 0.7227,
+            "primaryEdgeTouchCount": 1,
+            "wholeCardReliable": true,
+            "houghFallbackEvaluated": false,
+            "houghSkippedReason": "PRIMARY_CONTOUR_COMPLETE",
+            "contourReplacement": null,
+            "geometrySource": "original_image",
+            "detectorResizeScaleX": 1.026464,
+            "detectorResizeScaleY": 1.025714,
+            "detectorSourceCorners": [
+                [
+                    128.54000854492188,
+                    77.10501098632812
+                ],
+                [
+                    1096.739990234375,
+                    66.80502319335938
+                ],
+                [
+                    1177.0799560546875,
+                    699.0
+                ],
+                [
+                    97.6400146484375,
+                    677.594970703125
+                ]
+            ],
+            "frameAspectErrorRatio": 0.1242,
+            "fullFrameCandidateAvailable": true,
+            "fullFrameCandidateRecommended": true,
+            "geometryCandidateCount": 1,
+            "geometryCandidatesSkippedReason": "PRIMARY_WHOLE_CARD_RELIABLE",
+            "selection": {
+                "retried": false,
+                "initialCandidate": "perspective_contour",
+                "initialScore": 28.457,
+                "selectedCandidate": "perspective_contour",
+                "selectedScore": 28.457,
+                "selectionMargin": 0.6,
+                "retryReason": "PRIMARY_GEOMETRY_ACCEPTED",
+                "maximumOcrCandidates": 1,
+                "candidates": [
+                    {
+                        "name": "perspective_contour",
+                        "score": 28.457,
+                        "selected": true
+                    }
+                ]
+            },
+            "residualSkewCorrection": {
+                "retried": false,
+                "estimate": {
+                    "angleDegrees": -1.736,
+                    "confidence": 0.851,
+                    "lineCount": 956,
+                    "totalLineLength": 71271.99,
+                    "medianAbsoluteDeviation": 1.736,
+                    "reliable": true,
+                    "source": "hough",
+                    "hough": {
+                        "angleDegrees": -1.736,
+                        "confidence": 0.851,
+                        "lineCount": 956,
+                        "totalLineLength": 71271.99,
+                        "medianAbsoluteDeviation": 1.736,
+                        "reliable": true,
+                        "source": "hough"
+                    },
+                    "ocrBoxes": {
+                        "angleDegrees": 0.0,
+                        "confidence": 1.0,
+                        "lineCount": 40,
+                        "totalLineLength": 7818.26,
+                        "medianAbsoluteDeviation": 0.0,
+                        "reliable": true,
+                        "source": "ocr_boxes"
+                    }
+                },
+                "initialScore": 28.457,
+                "selectedScore": 28.457,
+                "selectedCorrectionDegrees": 0.0,
+                "correctionMode": "vertical_shear",
+                "candidates": [],
+                "retrySkipped": true,
+                "skipReason": "QR_AND_STRONG_OCR"
+            }
+        },
+        "orientation": {
+            "contentRotationDegrees": 0,
+            "orientationRetried": false,
+            "orientationSource": "CCCD_QR_POSITION",
+            "initialScore": 14.5,
+            "selectedScore": 14.5,
+            "geometrySelection": {
+                "retried": false,
+                "initialCandidate": "perspective_contour",
+                "initialScore": 28.457,
+                "selectedCandidate": "perspective_contour",
+                "selectedScore": 28.457,
+                "selectionMargin": 0.6,
+                "retryReason": "PRIMARY_GEOMETRY_ACCEPTED",
+                "maximumOcrCandidates": 1,
+                "candidates": [
+                    {
+                        "name": "perspective_contour",
+                        "score": 28.457,
+                        "selected": true
+                    }
+                ]
+            },
+            "residualSkew": {
+                "retried": false,
+                "estimate": {
+                    "angleDegrees": -1.736,
+                    "confidence": 0.851,
+                    "lineCount": 956,
+                    "totalLineLength": 71271.99,
+                    "medianAbsoluteDeviation": 1.736,
+                    "reliable": true,
+                    "source": "hough",
+                    "hough": {
+                        "angleDegrees": -1.736,
+                        "confidence": 0.851,
+                        "lineCount": 956,
+                        "totalLineLength": 71271.99,
+                        "medianAbsoluteDeviation": 1.736,
+                        "reliable": true,
+                        "source": "hough"
+                    },
+                    "ocrBoxes": {
+                        "angleDegrees": 0.0,
+                        "confidence": 1.0,
+                        "lineCount": 40,
+                        "totalLineLength": 7818.26,
+                        "medianAbsoluteDeviation": 0.0,
+                        "reliable": true,
+                        "source": "ocr_boxes"
+                    }
+                },
+                "initialScore": 28.457,
+                "selectedScore": 28.457,
+                "selectedCorrectionDegrees": 0.0,
+                "correctionMode": "vertical_shear",
+                "candidates": [],
+                "retrySkipped": true,
+                "skipReason": "QR_AND_STRONG_OCR"
+            },
+            "cardSide": {
+                "side": "FRONT",
+                "confidence": 0.95,
+                "frontScore": 8.0,
+                "backScore": 0.0,
+                "frontEvidence": [
+                    "CITIZEN_IDENTITY_TITLE",
+                    "FULL_NAME_LABEL",
+                    "DATE_OF_BIRTH_LABEL",
+                    "GENDER_LABEL"
+                ],
+                "backEvidence": []
+            },
+            "geometryRotationDegrees": 0,
+            "totalRotationDegrees": 0,
+            "layoutYOffset": -7.4,
+            "addressCropLayout": {
+                "boundaryY": 511.73,
+                "source": "residence_label",
+                "layoutYOffset": -7.4,
+                "labelAnchors": {
+                    "placeOfResidence": {
+                        "top": 513.73,
+                        "bottom": 561.5,
+                        "center": 537.62
+                    }
+                }
+            },
+            "fieldCropLayout": {
+                "source": "label_anchors",
+                "layoutYOffset": -7.4,
+                "boundaryY": 512,
+                "labelAnchors": {
+                    "idNumber": {
+                        "left": 299.64,
+                        "top": 269.48,
+                        "right": 397.11,
+                        "bottom": 301.93,
+                        "center": 285.71
+                    },
+                    "fullName": {
+                        "left": 299.64,
+                        "top": 309.14,
+                        "right": 534.3,
+                        "bottom": 346.09,
+                        "center": 327.62
+                    },
+                    "dateOfBirth": {
+                        "left": 300.54,
+                        "top": 378.54,
+                        "right": 564.98,
+                        "bottom": 421.8,
+                        "center": 400.17
+                    },
+                    "gender": {
+                        "left": 299.64,
+                        "top": 401.97,
+                        "right": 940.43,
+                        "bottom": 459.66,
+                        "center": 430.82
+                    },
+                    "nationality": {
+                        "left": 299.64,
+                        "top": 401.97,
+                        "right": 940.43,
+                        "bottom": 459.66,
+                        "center": 430.82
+                    },
+                    "placeOfResidence": {
+                        "left": 299.64,
+                        "top": 513.73,
+                        "right": 805.05,
+                        "bottom": 561.5,
+                        "center": 537.62
+                    }
+                },
+                "regions": {
+                    "idNumber": {
+                        "field": {
+                            "x1": 255,
+                            "y1": 253,
+                            "x2": 930,
+                            "y2": 306
+                        },
+                        "value": {
+                            "x1": 330,
+                            "y1": 262,
+                            "x2": 850,
+                            "y2": 306
+                        }
+                    },
+                    "fullName": {
+                        "field": {
+                            "x1": 270,
+                            "y1": 306,
+                            "x2": 975,
+                            "y2": 376
+                        },
+                        "value": {
+                            "x1": 270,
+                            "y1": 306,
+                            "x2": 985,
+                            "y2": 376
+                        }
+                    },
+                    "dateOfBirth": {
+                        "field": {
+                            "x1": 270,
+                            "y1": 376,
+                            "x2": 900,
+                            "y2": 400
+                        },
+                        "value": {
+                            "x1": 500,
+                            "y1": 376,
+                            "x2": 860,
+                            "y2": 400
+                        }
+                    },
+                    "gender": {
+                        "field": {
+                            "x1": 270,
+                            "y1": 400,
+                            "x2": 650,
+                            "y2": 460
+                        },
+                        "value": {
+                            "x1": 400,
+                            "y1": 400,
+                            "x2": 625,
+                            "y2": 460
+                        }
+                    },
+                    "nationality": {
+                        "field": {
+                            "x1": 620,
+                            "y1": 400,
+                            "x2": 995,
+                            "y2": 460
+                        },
+                        "value": {
+                            "x1": 730,
+                            "y1": 400,
+                            "x2": 1000,
+                            "y2": 460
+                        }
+                    },
+                    "placeOfOrigin": {
+                        "field": {
+                            "x1": 300,
+                            "y1": 460,
+                            "x2": 995,
+                            "y2": 512
+                        },
+                        "value": {
+                            "x1": 300,
+                            "y1": 460,
+                            "x2": 1000,
+                            "y2": 512
+                        }
+                    },
+                    "placeOfResidence": {
+                        "field": {
+                            "x1": 300,
+                            "y1": 512,
+                            "x2": 995,
+                            "y2": 630
+                        },
+                        "value": {
+                            "x1": 300,
+                            "y1": 512,
+                            "x2": 1000,
+                            "y2": 630
+                        }
+                    },
+                    "dateOfExpiry": {
+                        "field": {
+                            "x1": 0,
+                            "y1": 508,
+                            "x2": 345,
+                            "y2": 630
+                        },
+                        "value": {
+                            "x1": 15,
+                            "y1": 513,
+                            "x2": 345,
+                            "y2": 630
+                        }
+                    },
+                    "qrCode": {
+                        "field": {
+                            "x1": 803,
+                            "y1": 33,
+                            "x2": 929,
+                            "y2": 162
+                        },
+                        "value": {
+                            "x1": 803,
+                            "y1": 33,
+                            "x2": 929,
+                            "y2": 162
+                        },
+                        "detected": true,
+                        "decoded": true,
+                        "source": "QR_DETECTOR"
+                    }
+                }
+            }
+        },
+        "fullCardOcrVariant": "card",
+        "resizeRatio": 1.0257142857142858,
+        "fullCardData": {
+            "idNumber": "001094027603",
+            "fullName": "HOANG QUÓC PHONG",
+            "dateOfBirth": "26/07/1994",
+            "gender": "Nam",
+            "nationality": "Việt Nam",
+            "placeOfOrigin": null,
+            "placeOfResidence": "Place af residence' 76 Tổ 27, Cogia t din: 26/07/2034 Phương Liên, Đống Đa, Hà Nội, Dalo Ver",
+            "dateOfExpiry": null
+        },
+        "fieldData": {
+            "idNumber": null,
+            "fullName": null,
+            "dateOfBirth": null,
+            "gender": null,
+            "nationality": "Việt Nam",
+            "placeOfOrigin": "Qul quan / Pece d ongin:, Ti",
+            "placeOfResidence": null,
+            "dateOfExpiry": "26/07/2034"
+        },
+        "dataSources": {
+            "idNumber": "CCCD_QR",
+            "fullName": "CCCD_QR",
+            "dateOfBirth": "CCCD_QR",
+            "gender": "CCCD_QR",
+            "nationality": "FULL_CARD_OCR",
+            "placeOfOrigin": "FIELD_OCR",
+            "placeOfResidence": "CCCD_QR",
+            "dateOfExpiry": "RAW_TEXT_RECOVERY"
+        },
+        "qrFastPath": {
+            "enabled": true,
+            "status": "DECODED_VALID",
+            "message": "Đã khoanh và giải mã QR CCCD thành công.",
+            "decoded": true,
+            "payloadDecoded": true,
+            "used": true,
+            "decoder": "ZXing-C++ + OpenCV",
+            "selectedDecoder": "ZXing-C++",
+            "attemptCount": 1,
+            "elapsedMs": 4.2,
+            "selectedVariant": "card_raw",
+            "detectionVariant": "card_raw",
+            "regionDetected": true,
+            "polygon": [
+                [
+                    893.0,
+                    41.0
+                ],
+                [
+                    1029.0,
+                    37.0
+                ],
+                [
+                    1025.0,
+                    177.0
+                ],
+                [
+                    890.0,
+                    180.0
+                ]
+            ],
+            "boundingBox": {
+                "x": 890,
+                "y": 37,
+                "width": 139,
+                "height": 143
+            },
+            "searchRegion": {
+                "x": 665,
+                "y": 0,
+                "width": 443,
+                "height": 419
+            },
+            "searchRegions": {
+                "topRight": {
+                    "x": 665,
+                    "y": 0,
+                    "width": 443,
+                    "height": 419
+                },
+                "bottomLeft": {
+                    "x": 0,
+                    "y": 280,
+                    "width": 443,
+                    "height": 419
+                }
+            },
+            "orientationRotationDegrees": 0,
+            "orientationProbeAttemptCount": 1,
+            "orientationProbeElapsedMs": 4.2,
+            "format": "CCCD_QR_7_FIELDS",
+            "fieldCount": 7,
+            "providedFields": [
+                "idNumber",
+                "fullName",
+                "dateOfBirth",
+                "gender",
+                "placeOfResidence"
+            ],
+            "missingRequiredFields": [],
+            "appliedFields": [
+                "idNumber",
+                "fullName",
+                "dateOfBirth",
+                "gender",
+                "placeOfResidence"
+            ],
+            "agreementFields": [
+                "idNumber",
+                "fullName",
+                "dateOfBirth",
+                "gender",
+                "placeOfResidence"
+            ],
+            "conflicts": [],
+            "skippedFieldOcr": [
+                "dateOfBirth",
+                "fullName",
+                "gender",
+                "idNumber",
+                "placeOfResidence"
+            ],
+            "hasOldDocumentNumber": true,
+            "hasDateOfIssue": true,
+            "additionalFieldCount": 0,
+            "errors": [],
+            "errorDetails": [],
+            "debug": {
+                "detectionImage": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\qr\\qr_01_detection.jpg",
+                "cropImage": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\qr\\qr_02_crop.jpg",
+                "parserOverlay": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fields_parser_qr_debug.jpg",
+                "parserValueOverlay": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fields_values_parser_qr_debug.jpg"
+            }
+        }
+    },
+    "portrait": {
+        "success": true,
+        "faceDetected": false,
+        "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\portrait.jpg",
+        "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\portrait_raw.jpg",
+        "imageExists": true,
+        "rawImageExists": true,
+        "box": [
+            [
+                20,
+                193
+            ],
+            [
+                310,
+                193
+            ],
+            [
+                310,
+                538
+            ],
+            [
+                20,
+                538
+            ]
+        ],
+        "rawWidth": 290,
+        "rawHeight": 345,
+        "processedWidth": 290,
+        "processedHeight": 345
+    },
+    "rawText": [
+        "CỘNG HÒA XÃ HỘl CHỦ NGHĨA VIỆT NAM",
+        "Độc IậP 3 Iự do - Hanh phúc",
+        "SOCIALIST REPUBLIC OF VIET NAM",
+        "Independence - Frcedom Happiness",
+        "CĂN CƯỚC CÔNG DÂN",
+        "Citlzen Identity Card",
+        "S6 / No. 001094027603",
+        "Ho va ten / Ful name;",
+        "HOANG QUÓC PHONG",
+        "Ngay sinh / Date 0 birth: 26/07/1994",
+        "Giởl tinh / Sex Nam Quac tch / Nalionality Việt Nam",
+        "Quo quan / Aec aongin:",
+        "Phủ Thọ",
+        "Noi thuong tru / Place af residence' 76 Tổ 27",
+        "Cogia t din: 26/07/2034 Phương Liên, Đống Đa, Hà Nội",
+        "Dalo Ver"
+    ],
+    "textBoxes": [
+        {
+            "text": "CỘNG HÒA XÃ HỘl CHỦ NGHĨA VIỆT NAM",
+            "originalText": "CỘNG HÒA XÃ HỘl CHỦ NGHĨA VIỆT NAM",
+            "confidence": 0.7372829892796523,
+            "box": [
+                [
+                    329.0,
+                    26.0
+                ],
+                [
+                    858.0,
+                    26.0
+                ],
+                [
+                    858.0,
+                    76.0
+                ],
+                [
+                    329.0,
+                    76.0
+                ]
+            ]
+        },
+        {
+            "text": "Độc IậP",
+            "originalText": "Độc IậP",
+            "confidence": 0.38141588190153675,
+            "box": [
+                [
+                    448.0,
+                    68.0
+                ],
+                [
+                    535.0,
+                    68.0
+                ],
+                [
+                    535.0,
+                    106.0
+                ],
+                [
+                    448.0,
+                    106.0
+                ]
+            ]
+        },
+        {
+            "text": "3",
+            "originalText": "3",
+            "confidence": 0.180514858173475,
+            "box": [
+                [
+                    536.0,
+                    81.0
+                ],
+                [
+                    545.0,
+                    81.0
+                ],
+                [
+                    545.0,
+                    89.0
+                ],
+                [
+                    536.0,
+                    89.0
+                ]
+            ]
+        },
+        {
+            "text": "Iự do - Hanh phúc",
+            "originalText": "Iự do - Hanh phúc",
+            "confidence": 0.6642802553263639,
+            "box": [
+                [
+                    544.0,
+                    64.0
+                ],
+                [
+                    742.0,
+                    64.0
+                ],
+                [
+                    742.0,
+                    98.0
+                ],
+                [
+                    544.0,
+                    98.0
+                ]
+            ]
+        },
+        {
+            "text": "SOCIALIST REPUBLIC OF VIET NAM",
+            "originalText": "SOCIALIST REPUBLIC OF VIET NAM",
+            "confidence": 0.8382005973735168,
+            "box": [
+                [
+                    408.0,
+                    94.0
+                ],
+                [
+                    779.0,
+                    94.0
+                ],
+                [
+                    779.0,
+                    131.0
+                ],
+                [
+                    408.0,
+                    131.0
+                ]
+            ]
+        },
+        {
+            "text": "Independence - Frcedom Happiness",
+            "originalText": "Independence - Frcedom Happiness",
+            "confidence": 0.21809162612739694,
+            "box": [
+                [
+                    414.0,
+                    117.0
+                ],
+                [
+                    772.0,
+                    117.0
+                ],
+                [
+                    772.0,
+                    156.0
+                ],
+                [
+                    414.0,
+                    156.0
+                ]
+            ]
+        },
+        {
+            "text": "CĂN CƯỚC CÔNG DÂN",
+            "originalText": "CĂN CƯỚC CÔNG DÂN",
+            "confidence": 0.980683703498645,
+            "box": [
+                [
+                    328.0,
+                    152.0
+                ],
+                [
+                    861.0,
+                    152.0
+                ],
+                [
+                    861.0,
+                    225.0
+                ],
+                [
+                    328.0,
+                    225.0
+                ]
+            ]
+        },
+        {
+            "text": "Citlzen Identity Card",
+            "originalText": "Citlzen Identity Card",
+            "confidence": 0.7987421635753299,
+            "box": [
+                [
+                    331.0,
+                    234.0
+                ],
+                [
+                    571.0,
+                    234.0
+                ],
+                [
+                    571.0,
+                    271.0
+                ],
+                [
+                    331.0,
+                    271.0
+                ]
+            ]
+        },
+        {
+            "text": "S6 / No.",
+            "originalText": "S6 / No.",
+            "confidence": 0.29011077867685486,
+            "box": [
+                [
+                    332.0,
+                    299.0
+                ],
+                [
+                    440.0,
+                    299.0
+                ],
+                [
+                    440.0,
+                    335.0
+                ],
+                [
+                    332.0,
+                    335.0
+                ]
+            ]
+        },
+        {
+            "text": "001094027603",
+            "originalText": "001094027603",
+            "confidence": 0.79404022695707,
+            "box": [
+                [
+                    456.0,
+                    273.0
+                ],
+                [
+                    826.0,
+                    273.0
+                ],
+                [
+                    826.0,
+                    343.0
+                ],
+                [
+                    456.0,
+                    343.0
+                ]
+            ]
+        },
+        {
+            "text": "Ho va ten / Ful name;",
+            "originalText": "Ho va ten / Ful name;",
+            "confidence": 0.22149776489728934,
+            "box": [
+                [
+                    332.0,
+                    343.0
+                ],
+                [
+                    592.0,
+                    343.0
+                ],
+                [
+                    592.0,
+                    384.0
+                ],
+                [
+                    332.0,
+                    384.0
+                ]
+            ]
+        },
+        {
+            "text": "HOANG QUÓC PHONG",
+            "originalText": "HOANG QUÓC PHONG",
+            "confidence": 0.8207057934412221,
+            "box": [
+                [
+                    334.0,
+                    365.0
+                ],
+                [
+                    789.0,
+                    365.0
+                ],
+                [
+                    789.0,
+                    434.0
+                ],
+                [
+                    334.0,
+                    434.0
+                ]
+            ]
+        },
+        {
+            "text": "Ngay sinh / Date 0 birth:",
+            "originalText": "Ngay sinh / Date 0 birth:",
+            "confidence": 0.31213420613870363,
+            "box": [
+                [
+                    333.0,
+                    420.0
+                ],
+                [
+                    626.0,
+                    420.0
+                ],
+                [
+                    626.0,
+                    468.0
+                ],
+                [
+                    333.0,
+                    468.0
+                ]
+            ]
+        },
+        {
+            "text": "26/07/1994",
+            "originalText": "26/07/1994",
+            "confidence": 0.8874389686545271,
+            "box": [
+                [
+                    639.0,
+                    412.0
+                ],
+                [
+                    824.0,
+                    412.0
+                ],
+                [
+                    824.0,
+                    461.0
+                ],
+                [
+                    639.0,
+                    461.0
+                ]
+            ]
+        },
+        {
+            "text": "Giởl tinh / Sex Nam Quac tch / Nalionality Việt Nam",
+            "originalText": "Giởl tinh / Sex Nam Quac tch / Nalionality Việt Nam",
+            "confidence": 0.3260079168906792,
+            "box": [
+                [
+                    332.0,
+                    446.0
+                ],
+                [
+                    1042.0,
+                    446.0
+                ],
+                [
+                    1042.0,
+                    510.0
+                ],
+                [
+                    332.0,
+                    510.0
+                ]
+            ]
+        },
+        {
+            "text": "Quo quan / Aec aongin:",
+            "originalText": "Quo quan / Aec aongin:",
+            "confidence": 0.176470004246054,
+            "box": [
+                [
+                    334.0,
+                    515.0
+                ],
+                [
+                    639.0,
+                    515.0
+                ],
+                [
+                    639.0,
+                    555.0
+                ],
+                [
+                    334.0,
+                    555.0
+                ]
+            ]
+        },
+        {
+            "text": "Phủ Thọ",
+            "originalText": "Phủ Thọ",
+            "confidence": 0.6474924512267031,
+            "box": [
+                [
+                    341.0,
+                    546.0
+                ],
+                [
+                    483.0,
+                    546.0
+                ],
+                [
+                    483.0,
+                    592.0
+                ],
+                [
+                    341.0,
+                    592.0
+                ]
+            ]
+        },
+        {
+            "text": "Noi thuong tru / Place af residence' 76 Tổ 27",
+            "originalText": "Noi thuong tru / Place af residence' 76 Tổ 27",
+            "confidence": 0.3732520234669523,
+            "box": [
+                [
+                    332.0,
+                    570.0
+                ],
+                [
+                    892.0,
+                    570.0
+                ],
+                [
+                    892.0,
+                    623.0
+                ],
+                [
+                    332.0,
+                    623.0
+                ]
+            ]
+        },
+        {
+            "text": "Cogia t din: 26/07/2034 Phương Liên,",
+            "originalText": "Cogia t din: 26/07/2034 Phương Liên,",
+            "confidence": 0.05725699198857625,
+            "box": [
+                [
+                    37.0,
+                    613.0
+                ],
+                [
+                    563.0,
+                    613.0
+                ],
+                [
+                    563.0,
+                    676.0
+                ],
+                [
+                    37.0,
+                    676.0
+                ]
+            ]
+        },
+        {
+            "text": "Đống Đa, Hà Nội",
+            "originalText": "Đống Đa, Hà Nội",
+            "confidence": 0.9657998232312257,
+            "box": [
+                [
+                    554.0,
+                    610.0
+                ],
+                [
+                    824.0,
+                    610.0
+                ],
+                [
+                    824.0,
+                    669.0
+                ],
+                [
+                    554.0,
+                    669.0
+                ]
+            ]
+        },
+        {
+            "text": "Dalo Ver",
+            "originalText": "Dalo Ver",
+            "confidence": 0.16176767943195539,
+            "box": [
+                [
+                    41.0,
+                    647.0
+                ],
+                [
+                    155.0,
+                    647.0
+                ],
+                [
+                    155.0,
+                    673.0
+                ],
+                [
+                    41.0,
+                    673.0
+                ]
+            ]
+        }
+    ],
+    "mergedTextBoxes": [
+        {
+            "text": "CỘNG HÒA XÃ HỘl CHỦ NGHĨA VIỆT NAM",
+            "confidence": 0.7373,
+            "box": [
+                [
+                    329.0,
+                    26.0
+                ],
+                [
+                    858.0,
+                    26.0
+                ],
+                [
+                    858.0,
+                    76.0
+                ],
+                [
+                    329.0,
+                    76.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Độc IậP 3 Iự do - Hanh phúc",
+            "confidence": 0.4087,
+            "box": [
+                [
+                    448.0,
+                    64.0
+                ],
+                [
+                    742.0,
+                    64.0
+                ],
+                [
+                    742.0,
+                    106.0
+                ],
+                [
+                    448.0,
+                    106.0
+                ]
+            ],
+            "sourceCount": 3
+        },
+        {
+            "text": "SOCIALIST REPUBLIC OF VIET NAM",
+            "confidence": 0.8382,
+            "box": [
+                [
+                    408.0,
+                    94.0
+                ],
+                [
+                    779.0,
+                    94.0
+                ],
+                [
+                    779.0,
+                    131.0
+                ],
+                [
+                    408.0,
+                    131.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Independence - Frcedom Happiness",
+            "confidence": 0.2181,
+            "box": [
+                [
+                    414.0,
+                    117.0
+                ],
+                [
+                    772.0,
+                    117.0
+                ],
+                [
+                    772.0,
+                    156.0
+                ],
+                [
+                    414.0,
+                    156.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "CĂN CƯỚC CÔNG DÂN",
+            "confidence": 0.9807,
+            "box": [
+                [
+                    328.0,
+                    152.0
+                ],
+                [
+                    861.0,
+                    152.0
+                ],
+                [
+                    861.0,
+                    225.0
+                ],
+                [
+                    328.0,
+                    225.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Citlzen Identity Card",
+            "confidence": 0.7987,
+            "box": [
+                [
+                    331.0,
+                    234.0
+                ],
+                [
+                    571.0,
+                    234.0
+                ],
+                [
+                    571.0,
+                    271.0
+                ],
+                [
+                    331.0,
+                    271.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "S6 / No. 001094027603",
+            "confidence": 0.5421,
+            "box": [
+                [
+                    332.0,
+                    273.0
+                ],
+                [
+                    826.0,
+                    273.0
+                ],
+                [
+                    826.0,
+                    343.0
+                ],
+                [
+                    332.0,
+                    343.0
+                ]
+            ],
+            "sourceCount": 2
+        },
+        {
+            "text": "Ho va ten / Ful name;",
+            "confidence": 0.2215,
+            "box": [
+                [
+                    332.0,
+                    343.0
+                ],
+                [
+                    592.0,
+                    343.0
+                ],
+                [
+                    592.0,
+                    384.0
+                ],
+                [
+                    332.0,
+                    384.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "HOANG QUÓC PHONG",
+            "confidence": 0.8207,
+            "box": [
+                [
+                    334.0,
+                    365.0
+                ],
+                [
+                    789.0,
+                    365.0
+                ],
+                [
+                    789.0,
+                    434.0
+                ],
+                [
+                    334.0,
+                    434.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Ngay sinh / Date 0 birth: 26/07/1994",
+            "confidence": 0.5998,
+            "box": [
+                [
+                    333.0,
+                    412.0
+                ],
+                [
+                    824.0,
+                    412.0
+                ],
+                [
+                    824.0,
+                    468.0
+                ],
+                [
+                    333.0,
+                    468.0
+                ]
+            ],
+            "sourceCount": 2
+        },
+        {
+            "text": "Giởl tinh / Sex Nam Quac tch / Nalionality Việt Nam",
+            "confidence": 0.326,
+            "box": [
+                [
+                    332.0,
+                    446.0
+                ],
+                [
+                    1042.0,
+                    446.0
+                ],
+                [
+                    1042.0,
+                    510.0
+                ],
+                [
+                    332.0,
+                    510.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Quo quan / Aec aongin:",
+            "confidence": 0.1765,
+            "box": [
+                [
+                    334.0,
+                    515.0
+                ],
+                [
+                    639.0,
+                    515.0
+                ],
+                [
+                    639.0,
+                    555.0
+                ],
+                [
+                    334.0,
+                    555.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Phủ Thọ",
+            "confidence": 0.6475,
+            "box": [
+                [
+                    341.0,
+                    546.0
+                ],
+                [
+                    483.0,
+                    546.0
+                ],
+                [
+                    483.0,
+                    592.0
+                ],
+                [
+                    341.0,
+                    592.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Noi thuong tru / Place af residence' 76 Tổ 27",
+            "confidence": 0.3733,
+            "box": [
+                [
+                    332.0,
+                    570.0
+                ],
+                [
+                    892.0,
+                    570.0
+                ],
+                [
+                    892.0,
+                    623.0
+                ],
+                [
+                    332.0,
+                    623.0
+                ]
+            ],
+            "sourceCount": 1
+        },
+        {
+            "text": "Cogia t din: 26/07/2034 Phương Liên, Đống Đa, Hà Nội",
+            "confidence": 0.5115,
+            "box": [
+                [
+                    37.0,
+                    610.0
+                ],
+                [
+                    824.0,
+                    610.0
+                ],
+                [
+                    824.0,
+                    676.0
+                ],
+                [
+                    37.0,
+                    676.0
+                ]
+            ],
+            "sourceCount": 2
+        },
+        {
+            "text": "Dalo Ver",
+            "confidence": 0.1618,
+            "box": [
+                [
+                    41.0,
+                    647.0
+                ],
+                [
+                    155.0,
+                    647.0
+                ],
+                [
+                    155.0,
+                    673.0
+                ],
+                [
+                    41.0,
+                    673.0
+                ]
+            ],
+            "sourceCount": 1
+        }
+    ],
+    "fieldResults": {
+        "idNumber": {
+            "fieldName": "idNumber",
+            "success": true,
+            "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+            "rawText": [],
+            "normalizedText": [],
+            "joinedText": "",
+            "value": null,
+            "averageConfidence": 0.0,
+            "ocrVariant": null,
+            "ocrCandidates": [],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\idNumber.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\idNumber_raw.jpg",
+            "box": [
+                [
+                    255,
+                    253
+                ],
+                [
+                    930,
+                    253
+                ],
+                [
+                    930,
+                    306
+                ],
+                [
+                    255,
+                    306
+                ]
+            ],
+            "rawWidth": 675,
+            "rawHeight": 53,
+            "processedWidth": 2025,
+            "processedHeight": 159,
+            "attemptCount": 0,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": null,
+            "skipped": true,
+            "skipReason": "CCCD_QR_FAST_PATH",
+            "qrValidated": true
+        },
+        "fullName": {
+            "fieldName": "fullName",
+            "success": true,
+            "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+            "rawText": [],
+            "normalizedText": [],
+            "joinedText": "",
+            "value": null,
+            "averageConfidence": 0.0,
+            "ocrVariant": null,
+            "ocrCandidates": [],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fullName.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\fullName_raw.jpg",
+            "box": [
+                [
+                    270,
+                    306
+                ],
+                [
+                    975,
+                    306
+                ],
+                [
+                    975,
+                    376
+                ],
+                [
+                    270,
+                    376
+                ]
+            ],
+            "rawWidth": 705,
+            "rawHeight": 70,
+            "processedWidth": 2115,
+            "processedHeight": 210,
+            "attemptCount": 0,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": null,
+            "skipped": true,
+            "skipReason": "CCCD_QR_FAST_PATH",
+            "qrValidated": true
+        },
+        "dateOfBirth": {
+            "fieldName": "dateOfBirth",
+            "success": true,
+            "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+            "rawText": [],
+            "normalizedText": [],
+            "joinedText": "",
+            "value": null,
+            "averageConfidence": 0.0,
+            "ocrVariant": null,
+            "ocrCandidates": [],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\dateOfBirth.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\dateOfBirth_raw.jpg",
+            "box": [
+                [
+                    270,
+                    376
+                ],
+                [
+                    900,
+                    376
+                ],
+                [
+                    900,
+                    400
+                ],
+                [
+                    270,
+                    400
+                ]
+            ],
+            "rawWidth": 630,
+            "rawHeight": 24,
+            "processedWidth": 2205,
+            "processedHeight": 84,
+            "attemptCount": 0,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": null,
+            "skipped": true,
+            "skipReason": "CCCD_QR_FAST_PATH",
+            "qrValidated": true
+        },
+        "gender": {
+            "fieldName": "gender",
+            "success": true,
+            "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+            "rawText": [],
+            "normalizedText": [],
+            "joinedText": "",
+            "value": null,
+            "averageConfidence": 0.0,
+            "ocrVariant": null,
+            "ocrCandidates": [],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\gender.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\gender_raw.jpg",
+            "box": [
+                [
+                    270,
+                    400
+                ],
+                [
+                    650,
+                    400
+                ],
+                [
+                    650,
+                    460
+                ],
+                [
+                    270,
+                    460
+                ]
+            ],
+            "rawWidth": 380,
+            "rawHeight": 60,
+            "processedWidth": 1330,
+            "processedHeight": 210,
+            "attemptCount": 0,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": null,
+            "skipped": true,
+            "skipReason": "CCCD_QR_FAST_PATH",
+            "qrValidated": true
+        },
+        "nationality": {
+            "fieldName": "nationality",
+            "success": true,
+            "message": "OCR thành công",
+            "rawText": [
+                "nalitly Việt Nam"
+            ],
+            "normalizedText": [
+                "nalitly Việt Nam"
+            ],
+            "joinedText": "nalitly Việt Nam",
+            "value": "Việt Nam",
+            "averageConfidence": 0.515,
+            "ocrVariant": "value_raw",
+            "ocrCandidates": [
+                {
+                    "variant": "value_raw",
+                    "value": "Việt Nam",
+                    "confidence": 0.515,
+                    "normalizedText": [
+                        "nalitly Việt Nam"
+                    ],
+                    "joinedText": "nalitly Việt Nam",
+                    "rawText": [
+                        "nalitly Việt Nam"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\nationality_value_raw.jpg",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "nationality",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 1,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 6,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.648065,
+                        "coverage": 1.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [
+                            {
+                                "boxIndex": 0,
+                                "characterIndex": 1,
+                                "from": "a",
+                                "bestCandidate": "ậ",
+                                "bestScore": 0.613622,
+                                "originalScore": 0.351215,
+                                "margin": 0.010051,
+                                "decision": "WEAK_MISSING_MARK_EVIDENCE",
+                                "top3": [
+                                    {
+                                        "character": "ậ",
+                                        "score": 0.613622
+                                    },
+                                    {
+                                        "character": "ặ",
+                                        "score": 0.603571
+                                    },
+                                    {
+                                        "character": "ẵ",
+                                        "score": 0.514924
+                                    }
+                                ]
+                            },
+                            {
+                                "boxIndex": 0,
+                                "characterIndex": 14,
+                                "from": "a",
+                                "bestCandidate": "ặ",
+                                "bestScore": 0.657959,
+                                "originalScore": 0.403434,
+                                "margin": 0.007617,
+                                "decision": "WEAK_MISSING_MARK_EVIDENCE",
+                                "top3": [
+                                    {
+                                        "character": "ặ",
+                                        "score": 0.657959
+                                    },
+                                    {
+                                        "character": "ẳ",
+                                        "score": 0.650341
+                                    },
+                                    {
+                                        "character": "ẵ",
+                                        "score": 0.647434
+                                    }
+                                ]
+                            }
+                        ],
+                        "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+                    },
+                    "glyphRefinedText": [
+                        "nalitly Việt Nam"
+                    ]
+                }
+            ],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\nationality_value_raw.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\nationality_raw.jpg",
+            "box": [
+                [
+                    620,
+                    400
+                ],
+                [
+                    995,
+                    400
+                ],
+                [
+                    995,
+                    460
+                ],
+                [
+                    620,
+                    460
+                ]
+            ],
+            "rawWidth": 375,
+            "rawHeight": 60,
+            "processedWidth": 1125,
+            "processedHeight": 180,
+            "attemptCount": 1,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": {
+                "enabled": true,
+                "autoCorrect": true,
+                "available": true,
+                "fieldName": "nationality",
+                "atlasVersion": "2026.08.14",
+                "boxCount": 1,
+                "processedBoxes": 1,
+                "comparedCharacters": 6,
+                "confidentCharacters": 0,
+                "averageBestScore": 0.648065,
+                "coverage": 1.0,
+                "applied": false,
+                "corrections": [],
+                "reviewCandidates": [
+                    {
+                        "boxIndex": 0,
+                        "characterIndex": 1,
+                        "from": "a",
+                        "bestCandidate": "ậ",
+                        "bestScore": 0.613622,
+                        "originalScore": 0.351215,
+                        "margin": 0.010051,
+                        "decision": "WEAK_MISSING_MARK_EVIDENCE",
+                        "top3": [
+                            {
+                                "character": "ậ",
+                                "score": 0.613622
+                            },
+                            {
+                                "character": "ặ",
+                                "score": 0.603571
+                            },
+                            {
+                                "character": "ẵ",
+                                "score": 0.514924
+                            }
+                        ]
+                    },
+                    {
+                        "boxIndex": 0,
+                        "characterIndex": 14,
+                        "from": "a",
+                        "bestCandidate": "ặ",
+                        "bestScore": 0.657959,
+                        "originalScore": 0.403434,
+                        "margin": 0.007617,
+                        "decision": "WEAK_MISSING_MARK_EVIDENCE",
+                        "top3": [
+                            {
+                                "character": "ặ",
+                                "score": 0.657959
+                            },
+                            {
+                                "character": "ẳ",
+                                "score": 0.650341
+                            },
+                            {
+                                "character": "ẵ",
+                                "score": 0.647434
+                            }
+                        ]
+                    }
+                ],
+                "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+            }
+        },
+        "placeOfOrigin": {
+            "fieldName": "placeOfOrigin",
+            "success": true,
+            "message": "OCR thành công",
+            "rawText": [
+                "Qul quan / Pece d ongin:",
+                "Ti"
+            ],
+            "normalizedText": [
+                "Qul quan / Pece d ongin:",
+                "Ti"
+            ],
+            "joinedText": "Qul quan / Pece d ongin:, Ti",
+            "value": "Qul quan / Pece d ongin:, Ti",
+            "averageConfidence": 0.124,
+            "ocrVariant": "value_raw",
+            "ocrCandidates": [
+                {
+                    "variant": "value_raw",
+                    "value": "Qul quan / Pece d ongin:, Ti",
+                    "confidence": 0.124,
+                    "normalizedText": [
+                        "Qul quan / Pece d ongin:",
+                        "Ti"
+                    ],
+                    "joinedText": "Qul quan / Pece d ongin:, Ti",
+                    "rawText": [
+                        "Qul quan / Pece d ongin:",
+                        "Ti"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin_value_raw.jpg",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "placeOfOrigin",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 2,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 1,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.642154,
+                        "coverage": 1.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [],
+                        "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+                    },
+                    "glyphRefinedText": [
+                        "Qul quan / Pece d ongin:",
+                        "Ti"
+                    ]
+                },
+                {
+                    "variant": "value_processed",
+                    "value": "Pece d ongin:, Cl",
+                    "confidence": 0.0975,
+                    "normalizedText": [
+                        "Que quan / Pece d ongin:",
+                        "Cl"
+                    ],
+                    "joinedText": "Que quan / Pece d ongin:, Cl",
+                    "rawText": [
+                        "Que quan / Pece d ongin:",
+                        "Cl"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin_value.jpg",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "placeOfOrigin",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 2,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 0,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.0,
+                        "coverage": 0.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [],
+                        "skippedReason": "NO_RELIABLE_SEGMENTATION"
+                    },
+                    "glyphRefinedText": [
+                        "Que quan / Pece d ongin:",
+                        "Cl"
+                    ]
+                },
+                {
+                    "variant": "value_detail",
+                    "value": "Pec ơ onoia:, I",
+                    "confidence": 0.16,
+                    "normalizedText": [
+                        "Que quan / Pec ơ onoia:",
+                        "I"
+                    ],
+                    "joinedText": "Que quan / Pec ơ onoia:, I",
+                    "rawText": [
+                        "Que quan / Pec ơ onoia:",
+                        "I"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin_value_detail.png",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "placeOfOrigin",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 2,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 1,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.56921,
+                        "coverage": 1.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [
+                            {
+                                "boxIndex": 1,
+                                "characterIndex": 0,
+                                "from": "I",
+                                "bestCandidate": "Ì",
+                                "bestScore": 0.56921,
+                                "originalScore": 0.568474,
+                                "margin": 0.000583,
+                                "decision": "WEAK_MISSING_MARK_EVIDENCE",
+                                "top3": [
+                                    {
+                                        "character": "Ì",
+                                        "score": 0.56921
+                                    },
+                                    {
+                                        "character": "Í",
+                                        "score": 0.568626
+                                    },
+                                    {
+                                        "character": "I",
+                                        "score": 0.568474
+                                    }
+                                ]
+                            }
+                        ],
+                        "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+                    },
+                    "glyphRefinedText": [
+                        "Que quan / Pec ơ onoia:",
+                        "I"
+                    ]
+                },
+                {
+                    "variant": "wide_processed",
+                    "value": "Pec donzn:, l",
+                    "confidence": 0.1527,
+                    "normalizedText": [
+                        "Que quan / Pec donzn:",
+                        "l"
+                    ],
+                    "joinedText": "Que quan / Pec donzn:, l",
+                    "rawText": [
+                        "Que quan / Pec donzn:",
+                        "l"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin.jpg",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "placeOfOrigin",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 2,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 0,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.0,
+                        "coverage": 0.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [],
+                        "skippedReason": "NO_RELIABLE_SEGMENTATION"
+                    },
+                    "glyphRefinedText": [
+                        "Que quan / Pec donzn:",
+                        "l"
+                    ]
+                },
+                {
+                    "variant": "wide_raw",
+                    "value": "Qul quan / Pece d ongin:, Ti",
+                    "confidence": 0.124,
+                    "normalizedText": [
+                        "Qul quan / Pece d ongin:",
+                        "Ti"
+                    ],
+                    "joinedText": "Qul quan / Pece d ongin:, Ti",
+                    "rawText": [
+                        "Qul quan / Pece d ongin:",
+                        "Ti"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin_raw.jpg",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "placeOfOrigin",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 2,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 1,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.642154,
+                        "coverage": 1.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [],
+                        "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+                    },
+                    "glyphRefinedText": [
+                        "Qul quan / Pece d ongin:",
+                        "Ti"
+                    ]
+                }
+            ],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin_value_raw.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfOrigin_raw.jpg",
+            "box": [
+                [
+                    300,
+                    460
+                ],
+                [
+                    995,
+                    460
+                ],
+                [
+                    995,
+                    512
+                ],
+                [
+                    300,
+                    512
+                ]
+            ],
+            "rawWidth": 695,
+            "rawHeight": 52,
+            "processedWidth": 2085,
+            "processedHeight": 156,
+            "attemptCount": 5,
+            "referenceAgreement": false,
+            "retryErrors": [],
+            "glyphMatch": {
+                "enabled": true,
+                "autoCorrect": true,
+                "available": true,
+                "fieldName": "placeOfOrigin",
+                "atlasVersion": "2026.08.14",
+                "boxCount": 2,
+                "processedBoxes": 1,
+                "comparedCharacters": 1,
+                "confidentCharacters": 0,
+                "averageBestScore": 0.642154,
+                "coverage": 1.0,
+                "applied": false,
+                "corrections": [],
+                "reviewCandidates": [],
+                "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+            }
+        },
+        "placeOfResidence": {
+            "fieldName": "placeOfResidence",
+            "success": true,
+            "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+            "rawText": [],
+            "normalizedText": [],
+            "joinedText": "",
+            "value": null,
+            "averageConfidence": 0.0,
+            "ocrVariant": null,
+            "ocrCandidates": [],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfResidence.jpg",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\placeOfResidence_raw.jpg",
+            "box": [
+                [
+                    300,
+                    512
+                ],
+                [
+                    995,
+                    512
+                ],
+                [
+                    995,
+                    630
+                ],
+                [
+                    300,
+                    630
+                ]
+            ],
+            "rawWidth": 695,
+            "rawHeight": 118,
+            "processedWidth": 1877,
+            "processedHeight": 319,
+            "attemptCount": 0,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": null,
+            "skipped": true,
+            "skipReason": "CCCD_QR_FAST_PATH",
+            "qrValidated": true
+        },
+        "dateOfExpiry": {
+            "fieldName": "dateOfExpiry",
+            "success": true,
+            "message": "OCR thành công",
+            "rawText": [
+                "1/1",
+                "4 26/07/2034 5"
+            ],
+            "normalizedText": [
+                "1/1",
+                "4 26/07/2034 5"
+            ],
+            "joinedText": "1/1 4 26/07/2034 5",
+            "value": "26/07/2034",
+            "averageConfidence": 0.337,
+            "ocrVariant": "tight_raw",
+            "ocrCandidates": [
+                {
+                    "variant": "tight_raw",
+                    "value": "26/07/2034",
+                    "confidence": 0.337,
+                    "normalizedText": [
+                        "1/1",
+                        "4 26/07/2034 5"
+                    ],
+                    "joinedText": "1/1 4 26/07/2034 5",
+                    "rawText": [
+                        "1/1",
+                        "4 26/07/2034 5"
+                    ],
+                    "success": true,
+                    "message": "OCR thành công",
+                    "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\dateOfExpiry_tight_raw.png",
+                    "glyphMatch": {
+                        "enabled": true,
+                        "autoCorrect": true,
+                        "available": true,
+                        "fieldName": "dateOfExpiry",
+                        "atlasVersion": "2026.08.14",
+                        "boxCount": 2,
+                        "processedBoxes": 1,
+                        "comparedCharacters": 2,
+                        "confidentCharacters": 0,
+                        "averageBestScore": 0.683613,
+                        "coverage": 1.0,
+                        "applied": false,
+                        "corrections": [],
+                        "reviewCandidates": [
+                            {
+                                "boxIndex": 0,
+                                "characterIndex": 0,
+                                "from": "1",
+                                "bestCandidate": "4",
+                                "bestScore": 0.654719,
+                                "originalScore": 0.548819,
+                                "margin": 0.062365,
+                                "decision": "LOW_SEGMENTATION_CONFIDENCE",
+                                "top3": [
+                                    {
+                                        "character": "4",
+                                        "score": 0.654719
+                                    },
+                                    {
+                                        "character": "8",
+                                        "score": 0.592354
+                                    },
+                                    {
+                                        "character": "6",
+                                        "score": 0.586636
+                                    }
+                                ]
+                            },
+                            {
+                                "boxIndex": 0,
+                                "characterIndex": 2,
+                                "from": "1",
+                                "bestCandidate": "8",
+                                "bestScore": 0.712507,
+                                "originalScore": 0.484336,
+                                "margin": 0.011349,
+                                "decision": "LOW_SEGMENTATION_CONFIDENCE",
+                                "top3": [
+                                    {
+                                        "character": "8",
+                                        "score": 0.712507
+                                    },
+                                    {
+                                        "character": "0",
+                                        "score": 0.701158
+                                    },
+                                    {
+                                        "character": "9",
+                                        "score": 0.69826
+                                    }
+                                ]
+                            }
+                        ],
+                        "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+                    },
+                    "glyphRefinedText": [
+                        "1/1",
+                        "4 26/07/2034 5"
+                    ]
+                }
+            ],
+            "imagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\dateOfExpiry_tight_raw.png",
+            "rawImagePath": "storage\\debug\\337b1a7eb5b448c0b7a7b6bb49d37751\\fields\\dateOfExpiry_raw.jpg",
+            "box": [
+                [
+                    0,
+                    508
+                ],
+                [
+                    345,
+                    508
+                ],
+                [
+                    345,
+                    630
+                ],
+                [
+                    0,
+                    630
+                ]
+            ],
+            "rawWidth": 345,
+            "rawHeight": 122,
+            "processedWidth": 1208,
+            "processedHeight": 427,
+            "attemptCount": 1,
+            "referenceAgreement": true,
+            "retryErrors": [],
+            "glyphMatch": {
+                "enabled": true,
+                "autoCorrect": true,
+                "available": true,
+                "fieldName": "dateOfExpiry",
+                "atlasVersion": "2026.08.14",
+                "boxCount": 2,
+                "processedBoxes": 1,
+                "comparedCharacters": 2,
+                "confidentCharacters": 0,
+                "averageBestScore": 0.683613,
+                "coverage": 1.0,
+                "applied": false,
+                "corrections": [],
+                "reviewCandidates": [
+                    {
+                        "boxIndex": 0,
+                        "characterIndex": 0,
+                        "from": "1",
+                        "bestCandidate": "4",
+                        "bestScore": 0.654719,
+                        "originalScore": 0.548819,
+                        "margin": 0.062365,
+                        "decision": "LOW_SEGMENTATION_CONFIDENCE",
+                        "top3": [
+                            {
+                                "character": "4",
+                                "score": 0.654719
+                            },
+                            {
+                                "character": "8",
+                                "score": 0.592354
+                            },
+                            {
+                                "character": "6",
+                                "score": 0.586636
+                            }
+                        ]
+                    },
+                    {
+                        "boxIndex": 0,
+                        "characterIndex": 2,
+                        "from": "1",
+                        "bestCandidate": "8",
+                        "bestScore": 0.712507,
+                        "originalScore": 0.484336,
+                        "margin": 0.011349,
+                        "decision": "LOW_SEGMENTATION_CONFIDENCE",
+                        "top3": [
+                            {
+                                "character": "8",
+                                "score": 0.712507
+                            },
+                            {
+                                "character": "0",
+                                "score": 0.701158
+                            },
+                            {
+                                "character": "9",
+                                "score": 0.69826
+                            }
+                        ]
+                    }
+                ],
+                "skippedReason": "NO_HIGH_CONFIDENCE_CHANGE"
+            }
+        }
+    }
+}

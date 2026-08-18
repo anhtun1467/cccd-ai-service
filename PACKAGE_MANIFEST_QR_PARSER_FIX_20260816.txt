@@ -1,0 +1,39 @@
+CCCD QR/PARSER DIAGNOSTICS FIX - 2026-08-16
+
+Purpose
+=======
+- Stop one landscape card in a portrait photo being reported as two cards.
+- Prefer a better Hough quadrilateral when the brightness contour includes
+  background or the holder's hand.
+- Detect, outline, crop and decode dense CCCD QR codes with ZXing-C++ and
+  OpenCV fallback.
+- Add QR to the parser debug layout.
+- Separate sharp-image parser failures, true low-quality images and back-side
+  CCCD input into precise error codes.
+- Keep raw QR payload out of API metadata, logs and debug artifacts.
+
+Install target
+==============
+Extract at the project root containing app/, tests/ and requirements.txt.
+This archive is cumulative over cccd_qr_fast_path_trial_20260816.zip.
+
+Verification
+============
+- Full repository suite: 203 passed, 1 skipped.
+- Attached regression image: one card detected, QR status DECODED_VALID,
+  one ZXing-C++ attempt; no raw payload returned.
+
+Key files
+=========
+- HUONG_DAN_SUA_QR_PARSER_VA_LOI_ANH_NET_20260816.md
+- app/modules/card_detection/contour_detector.py
+- app/modules/card_detection/detector.py
+- app/modules/qr/diagnostics.py
+- app/modules/qr/cccd_qr_decoder.py
+- app/modules/qr/cccd_qr_parser.py
+- app/modules/qr/qr_debug.py
+- app/modules/ocr/card_side_classifier.py
+- app/services/ocr_pipeline.py
+- app/utils/ocr_error_detail.py
+- app/api/ocr.py
+- requirements.txt

@@ -3,7 +3,10 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from app.utils.image_validator import check_image_quality
+from app.utils.image_validator import (
+    INPUT_HARD_DARK_THRESHOLD,
+    check_image_quality,
+)
 
 
 def _checkerboard(
@@ -48,3 +51,33 @@ def test_crop_stage_can_use_a_stricter_blur_threshold() -> None:
     assert input_stage["is_valid"] is True
     assert crop_stage["is_valid"] is False
     assert crop_stage["error_code"] == "BLURRY_IMAGE"
+
+
+def test_dim_but_visible_input_reaches_the_ocr_pipeline() -> None:
+    dim_image = np.clip(
+        _checkerboard().astype(np.float32) * 0.22,
+        0,
+        255,
+    ).astype(np.uint8)
+
+    result = check_image_quality(
+        dim_image,
+        blur_threshold=0.0,
+        dark_threshold=INPUT_HARD_DARK_THRESHOLD,
+    )
+
+    assert INPUT_HARD_DARK_THRESHOLD < result["brightness_score"] < 60.0
+    assert result["is_valid"] is True
+
+
+def test_nearly_black_input_is_still_rejected() -> None:
+    nearly_black = np.full((240, 360, 3), 5, dtype=np.uint8)
+
+    result = check_image_quality(
+        nearly_black,
+        blur_threshold=0.0,
+        dark_threshold=INPUT_HARD_DARK_THRESHOLD,
+    )
+
+    assert result["is_valid"] is False
+    assert result["error_code"] == "DARK_IMAGE"

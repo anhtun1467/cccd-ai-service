@@ -187,16 +187,60 @@ def test_hough_refinement_uses_opposite_normals_for_full_card_edges() -> None:
     for y_value in range(355, 580, 32):
         cv2.line(image, (185, y_value), (460, y_value), (40, 50, 50), 2)
 
-    _, _, _, metadata = (
+    primary, _, _, metadata = (
         ContourDetector().find_card_contour_candidates_from_image(image)
     )
-    alternates = metadata["alternateCandidates"]
 
-    assert len(alternates) == 1
-    candidate = alternates[0]
-    assert candidate["name"].startswith("hough_whole_card_")
-    assert candidate["detection"]["relativeToPrimaryArea"] > 0.65
-    assert candidate["detection"]["overlapWithPrimary"] > 0.95
-    actual = ContourDetector._order_quadrilateral(candidate["corners"])
+    assert metadata["detectionMethod"] == "hough_quadrilateral"
+    replacement = metadata["contourReplacement"]
+    assert replacement["reason"] == "SUSPICIOUS_BRIGHTNESS_CONTOUR"
+    assert replacement["relativeArea"] > 0.65
+    assert replacement["overlapWithContour"] > 0.95
+    actual = ContourDetector._order_quadrilateral(primary)
     target = ContourDetector._order_quadrilateral(expected)
     assert float(np.mean(np.linalg.norm(actual - target, axis=1))) < 8.0
+
+
+def test_large_card_touching_frame_is_not_replaced_by_internal_strip() -> None:
+    """Hồi quy ảnh thật: contour gần trọn thẻ bị cụt góc có aspect 1.21."""
+    image = np.full((700, 525, 3), 24, dtype=np.uint8)
+    expected = np.int32([
+        [0, 0],
+        [500, 38],
+        [384, 570],
+        [38, 613],
+    ])
+    cv2.fillConvexPoly(image, expected, (205, 220, 205))
+    cv2.polylines(image, [expected], True, (45, 80, 70), 3)
+
+    # Chi tiết phân bố khắp thẻ, gồm một dải chữ có cạnh rất mạnh ở dưới.
+    for y_value in range(70, 535, 55):
+        left = 35 + int(y_value * 0.05)
+        cv2.line(
+            image,
+            (left, y_value),
+            (min(455, left + 330), y_value + 8),
+            (35, 45, 45),
+            3,
+            cv2.LINE_AA,
+        )
+    cv2.rectangle(image, (52, 365), (393, 565), (35, 45, 45), 4)
+    cv2.rectangle(image, (350, 55), (450, 155), (20, 20, 20), 7)
+
+    detector = ContourDetector()
+    primary, _, contours, metadata = (
+        detector.find_card_contour_candidates_from_image(image)
+    )
+
+    assert contours
+    assert detector.is_valid_card_contour(contours[0], image.shape) is False
+    assert metadata["detectionMethod"] == "large_foreground_contour"
+    assert metadata["wholeCardReliable"] is True
+    assert metadata["houghFallbackEvaluated"] is False
+    assert metadata["houghSkippedReason"] == (
+        "LARGE_FOREGROUND_CONTOUR_COMPLETE"
+    )
+    assert metadata["primaryAreaRatio"] > 0.55
+    actual = ContourDetector._order_quadrilateral(primary)
+    target = ContourDetector._order_quadrilateral(expected)
+    assert float(np.mean(np.linalg.norm(actual - target, axis=1))) < 14.0

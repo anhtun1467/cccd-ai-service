@@ -169,3 +169,50 @@ def test_only_verified_hough_candidate_is_ocrd_in_upright_direction(
     assert np.array_equal(selected_card, cv2.rotate(candidate, cv2.ROTATE_180))
     # Mảng đã xoay: ô đỏ từ góc trên-trái phải nằm ở góc dưới-phải.
     assert float(np.mean(calls[0][-10:, -10:, 2])) > 200.0
+
+
+def test_valid_qr_and_strong_ocr_skip_expensive_skew_ocr_trials(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline = OcrPipelineService()
+    card = np.full((630, 1000, 3), 190, dtype=np.uint8)
+    debug_dir = tmp_path / "debug"
+    debug_dir.mkdir()
+    monkeypatch.setattr(
+        pipeline.geometry_refiner,
+        "estimate_text_skew",
+        lambda *args, **kwargs: {
+            "angleDegrees": 2.4,
+            "confidence": 0.8,
+            "lineCount": 12,
+            "reliable": True,
+            "source": "hough",
+        },
+    )
+    monkeypatch.setattr(
+        pipeline.geometry_refiner,
+        "build_correction_angles",
+        lambda estimate: [-2.4, -1.2],
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("Không được chạy lại full-card OCR")
+
+    monkeypatch.setattr(pipeline, "run_full_card_ocr", fail_if_called)
+
+    _, _, result, info = pipeline.refine_residual_skew(
+        card_image=card,
+        enhanced_image=card.copy(),
+        first_ocr_result=_strong_ocr_result(),
+        card_output_path=tmp_path / "card.jpg",
+        enhanced_output_path=tmp_path / "enhanced.jpg",
+        debug_dir=debug_dir,
+        qr_decoded=True,
+    )
+
+    assert result == _strong_ocr_result()
+    assert info["retried"] is False
+    assert info["retrySkipped"] is True
+    assert info["skipReason"] == "QR_AND_STRONG_OCR"
+    assert info["candidates"] == []

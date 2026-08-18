@@ -136,7 +136,7 @@ def test_pipeline_uses_qr_and_skips_confirmed_field_ocr(
                 "dateOfBirth": "24/11/1996",
                 "gender": "Nam",
                 "placeOfResidence": (
-                    "Lâm Trung Thủy, Đức Thọ, Hà Tĩnh"
+                    "Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh"
                 ),
             },
             "auxiliaryData": {
@@ -217,4 +217,16 @@ def test_pipeline_uses_qr_and_skips_confirmed_field_ocr(
     assert response["metadata"]["qrFastPath"]["skippedFieldOcr"] == sorted(
         expected_skips
     )
+    assert response["metadata"]["qrFastPath"]["conflicts"] == [
+        {
+            "field": "placeOfResidence",
+            "ocrSource": "FULL_CARD_OCR",
+            "resolution": "CCCD_QR",
+            "requiresReview": False,
+        }
+    ]
+    assert response["metadata"]["validation"][
+        "qrAdvisoryDifferenceFields"
+    ] == ["placeOfResidence"]
+    assert response["metadata"]["imageQuality"]["decision"] == "PASSED"
     assert "structuredData" not in response["metadata"]["qrFastPath"]

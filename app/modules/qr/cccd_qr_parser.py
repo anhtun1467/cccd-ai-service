@@ -5,6 +5,8 @@ import unicodedata
 from datetime import date, datetime
 from typing import Any
 
+from app.modules.qr.diagnostics import build_qr_error_details
+
 
 class CCCDQRParser:
     """Parse payload QR CCCD mà không suy đoán trường không có trong QR."""
@@ -27,12 +29,16 @@ class CCCDQRParser:
             "structuredData": {},
             "auxiliaryData": {},
             "providedFields": [],
+            "missingRequiredFields": list(self.REQUIRED_FIELDS),
             "errors": [],
+            "errorDetails": [],
         }
         if not cleaned_payload:
+            errors = ["QR_PAYLOAD_EMPTY"]
             return {
                 **empty_result,
-                "errors": ["QR_PAYLOAD_EMPTY"],
+                "errors": errors,
+                "errorDetails": build_qr_error_details(errors),
             }
 
         fields = cleaned_payload.split("|")
@@ -42,10 +48,12 @@ class CCCDQRParser:
             <= field_count
             <= self.MAXIMUM_FIELD_COUNT
         ):
+            errors = ["QR_FIELD_COUNT_UNSUPPORTED"]
             return {
                 **empty_result,
                 "fieldCount": field_count,
-                "errors": ["QR_FIELD_COUNT_UNSUPPORTED"],
+                "errors": errors,
+                "errorDetails": build_qr_error_details(errors),
             }
 
         identifier = self.clean_text(fields[0])
@@ -116,7 +124,9 @@ class CCCDQRParser:
             "providedFields": (
                 list(structured_data.keys()) if success else []
             ),
+            "missingRequiredFields": missing_required,
             "errors": errors,
+            "errorDetails": build_qr_error_details(errors),
         }
 
     @staticmethod

@@ -78,3 +78,37 @@ def test_field_ocr_is_skipped_only_when_full_card_does_not_conflict() -> None:
     assert "gender" in skipped
     assert "placeOfResidence" in skipped
     assert reference["idNumber"] == "042096015766"
+
+
+def test_qr_residence_difference_is_advisory_and_skips_redundant_ocr() -> None:
+    qr_data = _qr_data()
+    ocr_data = {
+        **qr_data,
+        "placeOfResidence": (
+            "Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh"
+        ),
+    }
+    validator = CCCDValidator()
+
+    merged, _, diagnostics = fuse_qr_data(
+        ocr_data=ocr_data,
+        ocr_sources={field_name: "FULL_CARD_OCR" for field_name in ocr_data},
+        qr_data=qr_data,
+        validator=validator,
+    )
+    skipped = select_qr_field_ocr_skips(
+        qr_data=qr_data,
+        full_card_data=ocr_data,
+        validator=validator,
+    )
+
+    assert merged["placeOfResidence"] == qr_data["placeOfResidence"]
+    assert diagnostics["conflicts"] == [
+        {
+            "field": "placeOfResidence",
+            "ocrSource": "FULL_CARD_OCR",
+            "resolution": "CCCD_QR",
+            "requiresReview": False,
+        }
+    ]
+    assert "placeOfResidence" in skipped

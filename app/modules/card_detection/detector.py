@@ -280,8 +280,17 @@ class CardDetector:
                 "Phát hiện nhiều CCCD trong cùng một ảnh",
                 data={
                     "errorCode": "MULTIPLE_CARDS",
+                    "stage": "CARD_COUNT",
                     "reason": "Phát hiện nhiều CCCD trong cùng một ảnh",
                     "cardCount": len(multiple_cards),
+                    "debugImages": {
+                        "candidates": str(
+                            Path(output_dir) / "detector_00_multiple_cards.jpg"
+                        ) if output_dir else None,
+                        "mask": str(
+                            Path(output_dir) / "detector_00_multiple_mask.jpg"
+                        ) if output_dir else None,
+                    },
                     "suggestion": (
                         "Vui lòng chỉ chụp một CCCD trong mỗi ảnh."
                     ),
@@ -378,6 +387,9 @@ class CardDetector:
         )
         geometry["houghSkippedReason"] = contour_detection.get(
             "houghSkippedReason"
+        )
+        geometry["contourReplacement"] = contour_detection.get(
+            "contourReplacement"
         )
         geometry["geometrySource"] = (
             "original_image" if use_original_resolution else "resized_image"

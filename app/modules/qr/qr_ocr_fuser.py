@@ -56,7 +56,11 @@ def fuse_qr_data(
                         "field": field_name,
                         "ocrSource": current_source,
                         "resolution": "CCCD_QR",
-                        "requiresReview": True,
+                        # Địa chỉ QR là chuỗi dữ liệu máy đọc được và thường
+                        # đầy đủ hơn OCR nhiều dòng. Khác biệt địa chỉ vẫn
+                        # được giữ để chẩn đoán, nhưng không biến một kết quả
+                        # đủ 8 trường thành OCR_PARTIAL/lỗi chất lượng ảnh.
+                        "requiresReview": field_name != "placeOfResidence",
                     }
                 )
 
@@ -73,13 +77,16 @@ def select_qr_field_ocr_skips(
     full_card_data: dict[str, Any] | None,
     validator: CCCDValidator,
 ) -> set[str]:
-    """Chỉ bỏ field OCR khi QR hợp lệ và full-card OCR không phản đối."""
+    """Bỏ OCR field đã được QR xác nhận; QR địa chỉ luôn là nguồn chính."""
     skips: set[str] = set()
     qr_values = qr_data or {}
     full_values = full_card_data or {}
     for field_name in QR_MAPPABLE_FIELDS:
         qr_value = qr_values.get(field_name)
         if not is_valid_field_value(field_name, qr_value, validator):
+            continue
+        if field_name == "placeOfResidence":
+            skips.add(field_name)
             continue
         full_value = full_values.get(field_name)
         if not full_value or values_equivalent(
