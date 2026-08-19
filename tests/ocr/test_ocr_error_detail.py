@@ -34,3 +34,4 @@ def test_sharp_parser_failure_does_not_ask_user_to_improve_focus() -> None:
     )
     assert "lấy nét" not in detail["suggestion"].casefold()
     assert detail["missing_fields"] == ["dateOfBirth"]
+

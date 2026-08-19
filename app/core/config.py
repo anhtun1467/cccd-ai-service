@@ -10,11 +10,10 @@ class Settings(BaseSettings):
     output_dir: str = "storage/outputs"
     max_upload_size_mb: int = 10
 
-    # QR Fast Path - thử đọc QR ngay sau khi vùng thẻ được làm phẳng
-    # để xác định chiều trước full-card OCR và bỏ qua các field OCR
-    # đã có dữ liệu xác nhận từ QR.
-    # Ngân sách thời gian là mềm vì OpenCV không hỗ trợ hủy một lần
-    # detect/decode đang chạy giữa chừng.
+    # QR Fast Path - thử đọc QR ngay sau khi vùng thẻ được làm phẳng để xác
+    # định chiều trước full-card OCR và bỏ các field OCR đã có nguồn QR.
+    # Ngân sách này là mềm: OpenCV không hỗ trợ hủy một lần detect/decode
+    # đang chạy giữa chừng.
     qr_fast_path_enabled: bool = True
     qr_decode_budget_ms: float = 120.0
     qr_skip_confirmed_field_ocr: bool = True
@@ -27,14 +26,12 @@ class Settings(BaseSettings):
     face_match_threshold: float = 0.50
     face_review_threshold: float = 0.40
     face_max_image_pixels: int = 20_000_000
-
     # Ảnh CCCD và selfie là dữ liệu nhạy cảm; không lưu mặc định.
     face_save_debug: bool = False
     face_debug_dir: str = "storage/debug/face_verification_api"
 
-    # Phiên nối kết quả OCR với Face Verification.
-    # Client chỉ giữ một session id ngẫu nhiên, không được nhận
-    # hoặc tự gửi đường dẫn ảnh CCCD.
+    # Phiên nối kết quả OCR với Face Verification. Client chỉ giữ một
+    # session id ngẫu nhiên, không được nhận hoặc tự gửi đường dẫn ảnh CCCD.
     face_session_dir: str = "storage/face_sessions"
     face_session_ttl_seconds: int = 1800
     face_session_max_attempts: int = 5

@@ -153,3 +153,4 @@ def save_parser_qr_overlay(
     if not cv2.imwrite(str(output_path), overlay):
         return None
     return str(output_path)
+

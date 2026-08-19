@@ -69,3 +69,4 @@ def classify_cccd_side(ocr_result: dict[str, Any] | None) -> dict[str, Any]:
         "frontEvidence": front_evidence,
         "backEvidence": back_evidence,
     }
+

@@ -13,6 +13,7 @@ import numpy as np
 from app.core.config import settings
 from app.core.exceptions import BadRequestException
 from app.modules.card_detection.detector import CardDetector
+from app.modules.card_detection.fast_orientation import FastCardOrientation
 from app.modules.card_detection.geometry_refiner import GeometryRefiner
 from app.modules.card_detection.image_enhancer import cccd_image_enhancer
 from app.modules.ocr.card_side_classifier import classify_cccd_side
@@ -28,14 +29,14 @@ from app.modules.ocr.result_fuser import (
 from app.modules.ocr.service import ocr_service
 from app.modules.ocr.validator import CCCDValidator
 from app.modules.qr.cccd_qr_decoder import CCCDQRDecoder
+from app.modules.qr.qr_debug import (
+    save_parser_qr_overlay,
+    save_qr_debug_images,
+)
 from app.modules.qr.qr_ocr_fuser import (
     build_qr_reference_data,
     fuse_qr_data,
     select_qr_field_ocr_skips,
-)
-from app.modules.qr.qr_debug import (
-    save_parser_qr_overlay,
-    save_qr_debug_images,
 )
 from app.utils.image_validator import check_image_quality
 
@@ -73,6 +74,8 @@ class OcrPipelineService:
     ORIENTATION_SELECTION_MARGIN = 1.5
     CROP_BLUR_WARNING_THRESHOLD = 80.0
     CROP_DARK_WARNING_THRESHOLD = 60.0
+    CROP_HARD_BLUR_THRESHOLD = 28.0
+    CROP_HARD_DARK_THRESHOLD = 30.0
     MINIMUM_READABLE_CORE_FIELDS = 3
     GEOMETRY_RETRY_SCORE = 12.0
     GEOMETRY_SELECTION_MARGIN = 0.60
@@ -80,6 +83,7 @@ class OcrPipelineService:
 
     def __init__(self) -> None:
         self.card_detector = CardDetector()
+        self.fast_orientation = FastCardOrientation()
         self.geometry_refiner = GeometryRefiner()
         self.ocr_service = ocr_service
         self.field_ocr_service = field_ocr_service
@@ -272,63 +276,115 @@ class OcrPipelineService:
                 image_file=image_file,
             )
 
-        # Quét QR trước OCR. Ngoài việc cấp dữ liệu chuẩn, vị trí QR còn cho
-        # biết mặt trước đang đúng chiều (góc trên-phải) hay xoay 180 độ
-        # (góc dưới-trái), nhờ vậy tránh một lượt EasyOCR chỉ để thử chiều.
+        # Nhận chiều bằng tín hiệu ảnh nhẹ trước QR/OCR. Ảnh dọc đã được
+        # perspective transformer đưa về ngang; bước này chỉ cần quyết định
+        # 0/180 độ. Khi chắc chắn, QR luôn được quét ở góc trên-phải và
+        # EasyOCR không phải chạy một lượt trên ảnh úp ngược.
+        visual_orientation_started = time.perf_counter()
+        visual_orientation = self.fast_orientation.analyze(card_image)
+        total_pre_ocr_rotation = 0
+        visual_rotation_applied = False
+        if (
+            visual_orientation.get("reliable")
+            and int(visual_orientation.get("rotationDegrees", 0) or 0) == 180
+        ):
+            (
+                card_image,
+                enhanced_image,
+                visual_rotation_applied,
+            ) = self.rotate_card_pair_180(
+                card_image=card_image,
+                enhanced_image=enhanced_image,
+                card_output_path=card_output_path,
+                enhanced_output_path=enhanced_output_path,
+            )
+            if visual_rotation_applied:
+                total_pre_ocr_rotation = 180
+            else:
+                visual_orientation["reliable"] = False
+                visual_orientation["reason"] = "ORIENTATION_SAVE_FAILED"
+        stage_timings_ms["fastVisualOrientation"] = round(
+            (time.perf_counter() - visual_orientation_started) * 1000.0,
+            2,
+        )
+
+        # Quét QR đúng một lần trước OCR. Nếu QR hợp lệ hoặc ít nhất vùng QR
+        # vuông nằm ở góc dưới-trái, vị trí đó có quyền ưu tiên hơn tín hiệu
+        # màu và có thể sửa lại quyết định hình ảnh ở trên.
         qr_probe_started = time.perf_counter()
         qr_result = self.decode_qr_fast_path(card_image)
         qr_probe_attempt_count = int(
             qr_result.get("attemptCount", 0) or 0
         )
         qr_probe_elapsed_ms = float(qr_result.get("elapsedMs", 0.0) or 0.0)
-        qr_rotation_degrees = self.qr_orientation_rotation(
-            qr_result,
-            card_size=(int(card_image.shape[1]), int(card_image.shape[0])),
-        )
-        qr_orientation_applied = qr_rotation_degrees == 0
-        if qr_rotation_degrees == 180:
-            original_card_image = card_image
-            original_enhanced_image = enhanced_image
-            rotated_card_image = cv2.rotate(card_image, cv2.ROTATE_180)
-            rotated_enhanced_image = cv2.rotate(
+        qr_orientation = {
+            "reliable": False,
+            "rotationDegrees": 0,
+            "source": "QR_POSITION",
+            "confidence": 0.0,
+            "reason": "QR_POSITION_UNAVAILABLE",
+            "signals": {},
+            "elapsedMs": 0.0,
+        }
+        if isinstance(qr_result.get("boundingBox"), dict):
+            qr_orientation = self.fast_orientation.analyze(
+                card_image,
+                qr_result=qr_result,
+            )
+
+        qr_rotation_applied = False
+        if (
+            qr_orientation.get("reliable")
+            and int(qr_orientation.get("rotationDegrees", 0) or 0) == 180
+        ):
+            card_width = int(card_image.shape[1])
+            card_height = int(card_image.shape[0])
+            (
+                card_image,
                 enhanced_image,
-                cv2.ROTATE_180,
+                qr_rotation_applied,
+            ) = self.rotate_card_pair_180(
+                card_image=card_image,
+                enhanced_image=enhanced_image,
+                card_output_path=card_output_path,
+                enhanced_output_path=enhanced_output_path,
             )
-            card_saved = cv2.imwrite(
-                str(card_output_path),
-                rotated_card_image,
-            )
-            enhanced_saved = cv2.imwrite(
-                str(enhanced_output_path),
-                rotated_enhanced_image,
-            )
-            if card_saved and enhanced_saved:
-                card_image = rotated_card_image
-                enhanced_image = rotated_enhanced_image
-                qr_orientation_applied = True
-                rotated_qr_result = self.decode_qr_fast_path(card_image)
-                rotated_qr_result["attemptCount"] = (
-                    qr_probe_attempt_count
-                    + int(rotated_qr_result.get("attemptCount", 0) or 0)
+            if qr_rotation_applied:
+                total_pre_ocr_rotation = (
+                    total_pre_ocr_rotation + 180
+                ) % 360
+                self.rotate_qr_metadata_180(
+                    qr_result=qr_result,
+                    card_size=(card_width, card_height),
+                    rotated_card_image=card_image,
                 )
-                rotated_qr_result["elapsedMs"] = round(
-                    qr_probe_elapsed_ms
-                    + float(rotated_qr_result.get("elapsedMs", 0.0) or 0.0),
-                    2,
-                )
-                qr_result = rotated_qr_result
             else:
-                cv2.imwrite(str(card_output_path), original_card_image)
-                cv2.imwrite(
-                    str(enhanced_output_path),
-                    original_enhanced_image,
-                )
                 qr_result.setdefault("errors", []).append(
                     "QR_ORIENTATION_SAVE_FAILED"
                 )
-        qr_result["orientationRotationDegrees"] = qr_rotation_degrees
+                qr_orientation["reliable"] = False
+                qr_orientation["reason"] = "ORIENTATION_SAVE_FAILED"
+
+        orientation_probe = (
+            qr_orientation
+            if qr_orientation.get("reliable")
+            else visual_orientation
+        )
+        orientation_locked = bool(orientation_probe.get("reliable"))
+        orientation_source = str(
+            orientation_probe.get("source") or "UNKNOWN"
+        )
+        if visual_rotation_applied and qr_orientation.get("reliable"):
+            orientation_source = (
+                "FAST_VISUAL_THEN_" + orientation_source
+            )
+
+        qr_result["orientationRotationDegrees"] = total_pre_ocr_rotation
         qr_result["orientationProbeAttemptCount"] = qr_probe_attempt_count
         qr_result["orientationProbeElapsedMs"] = qr_probe_elapsed_ms
+        qr_result["orientationEvidence"] = self.make_json_safe(
+            orientation_probe
+        )
         stage_timings_ms["qrOrientationProbe"] = round(
             (time.perf_counter() - qr_probe_started) * 1000.0,
             2,
@@ -348,11 +404,17 @@ class OcrPipelineService:
         # úp ngược, mọi ứng viên đều có điểm thấp và pipeline phải OCR lại ba
         # ảnh không cần thiết trước khi mới thử xoay 180 độ.
         orientation_started = time.perf_counter()
-        if qr_result.get("decoded") and qr_orientation_applied:
+        if orientation_locked:
             orientation_info = {
-                "contentRotationDegrees": qr_rotation_degrees,
+                "contentRotationDegrees": total_pre_ocr_rotation,
                 "orientationRetried": False,
-                "orientationSource": "CCCD_QR_POSITION",
+                "orientationSource": orientation_source,
+                "orientationConfidence": float(
+                    orientation_probe.get("confidence", 0.0) or 0.0
+                ),
+                "preOcrOrientation": self.make_json_safe(
+                    orientation_probe
+                ),
                 "initialScore": self.calculate_orientation_score(
                     full_ocr_result
                 ),
@@ -377,6 +439,15 @@ class OcrPipelineService:
                 enhanced_output_path=enhanced_output_path,
                 debug_dir=debug_dir,
                 first_ocr_result=full_ocr_result,
+            )
+            orientation_info.setdefault(
+                "orientationSource",
+                "OCR_180_RETRY"
+                if orientation_info.get("orientationRetried")
+                else "OCR_PRIMARY",
+            )
+            orientation_info["preOcrOrientation"] = self.make_json_safe(
+                visual_orientation
             )
         stage_timings_ms["orientation"] = round(
             (time.perf_counter() - orientation_started) * 1000.0,
@@ -453,12 +524,24 @@ class OcrPipelineService:
         enhancement_retry_started = time.perf_counter()
         full_ocr_variant = "card"
         enhanced_ocr_retried = False
-        if (
+        selected_orientation_score = float(
+            orientation_info.get("selectedScore", 0.0) or 0.0
+        )
+        has_quality_warning = bool(
             cropped_quality["is_blurry"]
             or cropped_quality["is_too_dark"]
-            or float(orientation_info.get("selectedScore", 0.0))
-            < self.ORIENTATION_RETRY_THRESHOLD + 3.0
-        ):
+        )
+        should_retry_enhanced = bool(
+            not qr_result.get("decoded")
+            and (
+                selected_orientation_score < 10.0
+                or (
+                    has_quality_warning
+                    and selected_orientation_score < 14.0
+                )
+            )
+        )
+        if should_retry_enhanced:
             enhanced_ocr_retried = True
             enhanced_ocr_result = self.run_full_card_ocr(
                 image_path=enhanced_output_path,
@@ -469,16 +552,42 @@ class OcrPipelineService:
                     enhanced_result=enhanced_ocr_result,
                 )
             )
+        orientation_info["enhancedOcrRetry"] = {
+            "retried": enhanced_ocr_retried,
+            "selectedScoreBeforeRetry": selected_orientation_score,
+            "qualityWarning": has_quality_warning,
+            "skipReason": (
+                None
+                if enhanced_ocr_retried
+                else "QR_DATA_AVAILABLE"
+                if qr_result.get("decoded")
+                else "PRIMARY_OCR_STRONG_ENOUGH"
+            ),
+        }
         stage_timings_ms["qualityAndEnhancedRetry"] = round(
             (time.perf_counter() - enhancement_retry_started) * 1000.0,
             2,
         )
 
-        # Nếu probe ban đầu chưa giải mã được, thử đúng một lần trên ảnh cuối
-        # sau orientation/geometry. Kết quả QR đã hợp lệ được tái sử dụng,
-        # tránh quét lặp lại cùng ảnh ở cuối pipeline.
+        # Chỉ quét lại QR khi geometry/deskew thật sự đã tạo ảnh khác. Xoay
+        # 180 độ không cần quét lại vì ZXing đã bật try_rotate và tọa độ vùng
+        # QR được đổi trực tiếp ở trên.
         qr_retry_started = time.perf_counter()
-        if settings.qr_fast_path_enabled and not qr_result.get("decoded"):
+        geometry_changed = bool(
+            geometry_selection.get("selectedCandidate")
+            != geometry_selection.get("initialCandidate")
+        )
+        skew_changed = bool(
+            abs(float(skew_info.get("selectedCorrectionDegrees", 0.0) or 0.0))
+            >= 0.05
+        )
+        should_retry_qr = bool(
+            settings.qr_fast_path_enabled
+            and not qr_result.get("decoded")
+            and (geometry_changed or skew_changed)
+        )
+        qr_result["retryAttempted"] = should_retry_qr
+        if should_retry_qr:
             initial_attempt_count = int(
                 qr_result.get("attemptCount", 0) or 0
             )
@@ -504,7 +613,14 @@ class OcrPipelineService:
             final_qr_result["orientationRotationDegrees"] = int(
                 orientation_info.get("contentRotationDegrees", 0) or 0
             )
+            final_qr_result["orientationEvidence"] = self.make_json_safe(
+                orientation_probe
+            )
             qr_result = final_qr_result
+            qr_result["retryAttempted"] = True
+            qr_result["retryReason"] = "CARD_GEOMETRY_CHANGED"
+        elif settings.qr_fast_path_enabled and not qr_result.get("decoded"):
+            qr_result["retrySkippedReason"] = "CARD_GEOMETRY_UNCHANGED"
         stage_timings_ms["qrFastPath"] = round(
             stage_timings_ms.get("qrOrientationProbe", 0.0)
             + (time.perf_counter() - qr_retry_started) * 1000.0,
@@ -625,7 +741,7 @@ class OcrPipelineService:
         # Hợp nhất sơ bộ trước field OCR để lấy reference từ structuredData,
         # raw text và vị trí text box. Khi lần OCR field đầu tiên khớp reference
         # hợp lệ, FieldOCRService có thể dừng sớm thay vì thử 3-6 biến thể.
-        preliminary_card_data, _ = fuse_ocr_data(
+        preliminary_card_data, preliminary_data_sources = fuse_ocr_data(
             full_card_data=selected_full_card_data,
             field_data={},
             raw_text=raw_text_for_fusion,
@@ -647,6 +763,28 @@ class OcrPipelineService:
                 full_card_data=preliminary_card_data,
                 validator=self.validator,
             )
+        full_card_field_ocr_skips = (
+            self.select_validated_full_card_field_ocr_skips(
+                preliminary_card_data,
+                data_sources=preliminary_data_sources,
+            )
+            - qr_field_ocr_skips
+        )
+        all_field_ocr_skips = (
+            qr_field_ocr_skips | full_card_field_ocr_skips
+        )
+        skip_field_sources = {
+            field_name: "CCCD_QR_FAST_PATH"
+            for field_name in qr_field_ocr_skips
+        }
+        skip_field_sources.update({
+            field_name: (
+                "VALIDATED_SPATIAL_OCR"
+                if preliminary_data_sources.get(field_name) == "SPATIAL_OCR"
+                else "VALIDATED_FULL_CARD_OCR"
+            )
+            for field_name in full_card_field_ocr_skips
+        })
         field_reference_data = build_qr_reference_data(
             full_card_data=preliminary_card_data,
             qr_data=qr_data,
@@ -706,7 +844,8 @@ class OcrPipelineService:
             address_layout=address_layout,
             field_layout=field_layout,
             reference_data=field_reference_data,
-            skip_fields=qr_field_ocr_skips,
+            skip_fields=all_field_ocr_skips,
+            skip_field_sources=skip_field_sources,
         )
         parser_qr_overlay = save_parser_qr_overlay(
             fields_debug_path=field_output_dir / "fields_debug.jpg",
@@ -835,7 +974,8 @@ class OcrPipelineService:
         )
 
         if not readability["isReadable"]:
-            low_quality = bool(
+            low_quality = bool(readability.get("hardLowQuality"))
+            has_quality_warning = bool(
                 cropped_quality.get("is_blurry")
                 or cropped_quality.get("is_too_dark")
             )
@@ -876,10 +1016,14 @@ class OcrPipelineService:
                 "cropBlurScore": cropped_quality["blur_score"],
                 "brightnessScore": cropped_quality["brightness_score"],
                 "decision": (
-                    "FAILED_LOW_QUALITY"
+                    "FAILED_HARD_LOW_QUALITY"
                     if low_quality
+                    else "PASSED_WITH_WARNING_FAILED_PARSER"
+                    if has_quality_warning
                     else "PASSED_IMAGE_FAILED_PARSER"
                 ),
+                "qualityIsAdvisory": not low_quality,
+                "failureStage": "PARSER_VALIDATION",
                 "warnings": readability["warnings"],
                 "readableCoreFields": readability[
                     "readableCoreFields"
@@ -1039,6 +1183,18 @@ class OcrPipelineService:
                 "processingStagesMs": stage_timings_ms,
                 "fullCardOcrAttemptCount": full_card_ocr_attempt_count,
                 "fieldOcrAttemptCount": field_ocr_attempt_count,
+                "fieldOcrSkippedByValidatedFullCard": sorted(
+                    field_name
+                    for field_name in full_card_field_ocr_skips
+                    if skip_field_sources.get(field_name)
+                    == "VALIDATED_FULL_CARD_OCR"
+                ),
+                "fieldOcrSkippedByValidatedSpatialOcr": sorted(
+                    field_name
+                    for field_name in full_card_field_ocr_skips
+                    if skip_field_sources.get(field_name)
+                    == "VALIDATED_SPATIAL_OCR"
+                ),
                 "averageConfidence": (
                     average_confidence
                 ),
@@ -1135,36 +1291,103 @@ class OcrPipelineService:
         return self.qr_decoder.finalize_result(result, started)
 
     @staticmethod
+    def rotate_card_pair_180(
+        card_image: Any,
+        enhanced_image: Any,
+        card_output_path: Path,
+        enhanced_output_path: Path,
+    ) -> tuple[Any, Any, bool]:
+        """Xoay và lưu đồng bộ hai ảnh; thất bại thì phục hồi bản ban đầu."""
+        rotated_card = cv2.rotate(card_image, cv2.ROTATE_180)
+        rotated_enhanced = cv2.rotate(enhanced_image, cv2.ROTATE_180)
+        card_saved = cv2.imwrite(str(card_output_path), rotated_card)
+        enhanced_saved = cv2.imwrite(
+            str(enhanced_output_path),
+            rotated_enhanced,
+        )
+        if card_saved and enhanced_saved:
+            return rotated_card, rotated_enhanced, True
+
+        cv2.imwrite(str(card_output_path), card_image)
+        cv2.imwrite(str(enhanced_output_path), enhanced_image)
+        return card_image, enhanced_image, False
+
+    @staticmethod
+    def rotate_qr_metadata_180(
+        qr_result: dict[str, Any],
+        card_size: tuple[int, int],
+        rotated_card_image: Any,
+    ) -> None:
+        """Đổi tọa độ khoanh QR sang ảnh đã xoay mà không giải mã lần hai."""
+        card_width = max(int(card_size[0]), 1)
+        card_height = max(int(card_size[1]), 1)
+        try:
+            points = np.asarray(
+                qr_result.get("polygon", []),
+                dtype=np.float32,
+            ).reshape(-1, 2)
+        except (TypeError, ValueError):
+            points = np.empty((0, 2), dtype=np.float32)
+        if len(points) >= 4:
+            rotated_points = points.copy()
+            rotated_points[:, 0] = card_width - 1 - points[:, 0]
+            rotated_points[:, 1] = card_height - 1 - points[:, 1]
+            qr_result["polygon"] = [
+                [round(float(x), 2), round(float(y), 2)]
+                for x, y in rotated_points[:4]
+            ]
+            x1 = max(0, int(np.floor(np.min(rotated_points[:, 0]))))
+            y1 = max(0, int(np.floor(np.min(rotated_points[:, 1]))))
+            x2 = min(
+                card_width,
+                int(np.ceil(np.max(rotated_points[:, 0]))) + 1,
+            )
+            y2 = min(
+                card_height,
+                int(np.ceil(np.max(rotated_points[:, 1]))) + 1,
+            )
+            if x2 > x1 and y2 > y1:
+                qr_result["boundingBox"] = {
+                    "x": x1,
+                    "y": y1,
+                    "width": x2 - x1,
+                    "height": y2 - y1,
+                }
+                if (
+                    isinstance(rotated_card_image, np.ndarray)
+                    and rotated_card_image.size
+                ):
+                    padding = max(
+                        4,
+                        round(min(x2 - x1, y2 - y1) * 0.08),
+                    )
+                    qr_result["debugCrop"] = rotated_card_image[
+                        max(0, y1 - padding) : min(
+                            card_height,
+                            y2 + padding,
+                        ),
+                        max(0, x1 - padding) : min(
+                            card_width,
+                            x2 + padding,
+                        ),
+                    ].copy()
+        qr_result["positionNormalizedAfterRotation"] = True
+
+    @staticmethod
     def qr_orientation_rotation(
         qr_result: dict[str, Any],
         card_size: tuple[int, int],
     ) -> int:
-        """QR dưới-trái của mặt trước cho biết ảnh đang bị xoay 180 độ."""
-        if not qr_result.get("decoded"):
-            return 0
-        card_width = max(int(card_size[0]), 1)
-        card_height = max(int(card_size[1]), 1)
-        box = qr_result.get("boundingBox")
-        if isinstance(box, dict):
-            center_x = float(box.get("x", 0)) + float(box.get("width", 0)) / 2
-            center_y = float(box.get("y", 0)) + float(box.get("height", 0)) / 2
-        else:
-            try:
-                points = np.asarray(
-                    qr_result.get("polygon", []),
-                    dtype=np.float32,
-                ).reshape(-1, 2)
-                if len(points) < 4:
-                    return 0
-                points = cv2.convexHull(points).reshape(-1, 2)
-            except (AttributeError, TypeError, ValueError, cv2.error):
-                return 0
-            center_x = float(points[:, 0].mean())
-            center_y = float(points[:, 1].mean())
-        return 180 if (
-            center_x < card_width * 0.50
-            and center_y > card_height * 0.50
-        ) else 0
+        """Giữ API cũ, nhưng chấp nhận cả vùng QR chưa giải mã hợp lệ."""
+        evidence = FastCardOrientation._qr_position_evidence(
+            qr_result,
+            card_size=card_size,
+        )
+        return (
+            int(evidence.get("rotationDegrees", 0) or 0)
+            if evidence.get("reliable")
+            else 0
+        )
 
     def run_full_card_ocr(
         self,
@@ -1227,6 +1450,41 @@ class OcrPipelineService:
         )
         score += confidence * 2.0
         return round(float(score), 3)
+
+    def select_validated_full_card_field_ocr_skips(
+        self,
+        full_card_data: dict[str, Any],
+        data_sources: dict[str, str] | None = None,
+    ) -> set[str]:
+        """Bỏ OCR vùng khi kết quả chính đã qua validator chặt.
+
+        Họ tên vẫn được OCR vùng khi QR không cung cấp. Địa chỉ chỉ được tái
+        sử dụng nếu parser không gian đã tách đúng theo nhãn/tọa độ và chuỗi
+        tiếp tục vượt qua validator địa chỉ nghiêm ngặt.
+        """
+        checks = {
+            "idNumber": self.validator.is_valid_id_number,
+            "dateOfBirth": self.validator.is_valid_date,
+            "gender": self.validator.is_valid_gender,
+            "nationality": self.validator.is_valid_nationality,
+            "dateOfExpiry": self.validator.is_valid_date,
+        }
+        skipped = {
+            field_name
+            for field_name, validator in checks.items()
+            if validator(full_card_data.get(field_name))
+        }
+        sources = data_sources or {}
+        for field_name in ("placeOfOrigin", "placeOfResidence"):
+            if (
+                sources.get(field_name) == "SPATIAL_OCR"
+                and self.validator.is_valid_address(
+                    full_card_data.get(field_name),
+                    field_name=field_name,
+                )
+            ):
+                skipped.add(field_name)
+        return skipped
 
     def score_geometry_ocr_result(
         self,
@@ -1514,6 +1772,10 @@ class OcrPipelineService:
         correction_angles = self.geometry_refiner.build_correction_angles(
             estimate
         )
+        offered_correction_count = len(correction_angles)
+        # Một ứng viên đủ để sửa xiên dư; ứng viên thứ hai từng làm phát sinh
+        # thêm một lượt OCR toàn thẻ rất tốn CPU với lợi ích không ổn định.
+        correction_angles = correction_angles[:1]
         info: dict[str, Any] = {
             "retried": bool(correction_angles),
             "estimate": estimate,
@@ -1522,6 +1784,8 @@ class OcrPipelineService:
             "selectedCorrectionDegrees": 0.0,
             "correctionMode": "vertical_shear",
             "candidates": [],
+            "candidateCountOffered": offered_correction_count,
+            "maximumOcrCandidates": 1,
         }
         selected_debug_path = debug_dir / "detector_06_deskewed.jpg"
         estimated_angle = abs(float(estimate.get("angleDegrees", 0.0) or 0.0))
@@ -1535,7 +1799,7 @@ class OcrPipelineService:
             skip_retry_reason = "QR_AND_STRONG_OCR"
         elif (
             correction_angles
-            and initial_score >= 26.0
+            and initial_score >= 20.0
             and estimated_angle <= 1.5
         ):
             skip_retry_reason = "STRONG_OCR_SMALL_SKEW"
@@ -1772,6 +2036,37 @@ class OcrPipelineService:
             "meaningfulLines": meaningful_lines,
         }
 
+    def is_hard_low_image_quality(
+        self,
+        cropped_quality: dict[str, Any],
+    ) -> bool:
+        """Phân biệt cảnh báo Laplacian với ảnh thực sự không thể đọc.
+
+        Hoa văn bảo an và chữ in mảnh có thể làm điểm Laplacian thấp dù mắt
+        người vẫn thấy rõ. Chỉ ngưỡng nghiêm trọng mới được phép tăng yêu cầu
+        parser hoặc gắn lỗi chất lượng; ngưỡng thường chỉ tạo cảnh báo.
+        """
+        try:
+            blur_score = float(cropped_quality.get("blur_score"))
+        except (TypeError, ValueError):
+            blur_score = float("inf")
+        try:
+            brightness_score = float(
+                cropped_quality.get("brightness_score")
+            )
+        except (TypeError, ValueError):
+            brightness_score = float("inf")
+        return bool(
+            (
+                cropped_quality.get("is_blurry")
+                and blur_score < self.CROP_HARD_BLUR_THRESHOLD
+            )
+            or (
+                cropped_quality.get("is_too_dark")
+                and brightness_score < self.CROP_HARD_DARK_THRESHOLD
+            )
+        )
+
     def evaluate_ocr_readability(
         self,
         merged_data: dict[str, Any],
@@ -1811,9 +2106,12 @@ class OcrPipelineService:
             cropped_quality.get("is_blurry")
             or cropped_quality.get("is_too_dark")
         )
+        hard_low_image_score = self.is_hard_low_image_quality(
+            cropped_quality
+        )
         minimum_fields = (
             self.MINIMUM_READABLE_CORE_FIELDS
-            if has_low_image_score
+            if hard_low_image_score
             else 2
         )
         meaningful_lines = sum(
@@ -1828,8 +2126,8 @@ class OcrPipelineService:
         warnings: list[str] = []
         if cropped_quality.get("is_blurry"):
             warnings.append(
-                "Ảnh hơi mờ; kết quả đã được giữ vì OCR vẫn đọc được "
-                "các trường cốt lõi."
+                "Bộ đo tự động ghi nhận điểm độ nét thấp; đây chỉ là cảnh "
+                "báo và không tự kết luận ảnh không rõ."
             )
         if cropped_quality.get("is_too_dark"):
             warnings.append(
@@ -1848,6 +2146,9 @@ class OcrPipelineService:
 
         return {
             "isReadable": is_readable,
+            "hardLowQuality": hard_low_image_score,
+            "qualityWarning": has_low_image_score,
+            "minimumReadableCoreFields": minimum_fields,
             "readableCoreFields": readable_fields,
             "missingCoreFields": missing_fields,
             "warnings": warnings,
@@ -2008,6 +2309,7 @@ class OcrPipelineService:
         field_layout: dict[str, Any] | None = None,
         reference_data: dict[str, Any] | None = None,
         skip_fields: Collection[str] | None = None,
+        skip_field_sources: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """
         Cắt và OCR từng field trên CCCD.
@@ -2027,6 +2329,7 @@ class OcrPipelineService:
                     field_layout=field_layout,
                     reference_data=reference_data,
                     skip_fields=skip_fields,
+                    skip_field_sources=skip_field_sources,
                 )
             )
 
@@ -2453,6 +2756,16 @@ class OcrPipelineService:
                 "orientationProbeElapsedMs": float(
                     qr_result.get("orientationProbeElapsedMs", 0.0) or 0.0
                 ),
+                "orientationEvidence": qr_result.get(
+                    "orientationEvidence",
+                    {},
+                ),
+                "positionNormalizedAfterRotation": bool(
+                    qr_result.get("positionNormalizedAfterRotation")
+                ),
+                "retryAttempted": bool(qr_result.get("retryAttempted")),
+                "retryReason": qr_result.get("retryReason"),
+                "retrySkippedReason": qr_result.get("retrySkippedReason"),
                 "format": qr_result.get("format"),
                 "fieldCount": int(qr_result.get("fieldCount", 0) or 0),
                 "providedFields": list(

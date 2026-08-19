@@ -73,3 +73,4 @@ def build_ocr_error_detail(result: dict[str, Any]) -> dict[str, Any]:
         "debug_dir": metadata.get("debugDir"),
         "debug_images": rejection.get("debugImages"),
     }
+

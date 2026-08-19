@@ -201,21 +201,29 @@ def test_pipeline_uses_qr_and_skips_confirmed_field_ocr(
 
     response = pipeline.process_cccd_image(str(input_path))
 
-    expected_skips = {
+    expected_qr_skips = {
         "idNumber",
         "fullName",
         "dateOfBirth",
         "gender",
         "placeOfResidence",
     }
+    expected_skips = expected_qr_skips | {"nationality", "dateOfExpiry"}
     assert set(captured["skip_fields"]) == expected_skips
+    assert captured["skip_field_sources"]["nationality"] == (
+        "VALIDATED_FULL_CARD_OCR"
+    )
     assert response["status"] == "OCR_SUCCESS"
     assert response["cccdData"]["fullName"] == "ĐINH XUÂN HOÀNG"
     assert response["metadata"]["dataSources"]["fullName"] == "CCCD_QR"
-    assert response["metadata"]["fieldOcrAttemptCount"] == 3
+    assert response["metadata"]["fieldOcrAttemptCount"] == 1
+    assert response["metadata"]["fieldOcrSkippedByValidatedFullCard"] == [
+        "dateOfExpiry",
+        "nationality",
+    ]
     assert response["metadata"]["qrFastPath"]["decoded"] is True
     assert response["metadata"]["qrFastPath"]["skippedFieldOcr"] == sorted(
-        expected_skips
+        expected_qr_skips
     )
     assert response["metadata"]["qrFastPath"]["conflicts"] == [
         {

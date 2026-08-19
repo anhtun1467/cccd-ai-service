@@ -16,7 +16,6 @@ from app.modules.ocr.vietnamese_charset import (
     VIETNAMESE_OCR_ALLOWLIST,
 )
 
-
 # Giữ các tên cũ để tương thích code/test hiện tại. Nguồn duy nhất của bảng
 # ký tự nằm trong vietnamese_charset.py, tránh thiếu dấu giữa các engine.
 VIETNAMESE_LETTERS = VIETNAMESE_LETTERS_UPPER
@@ -109,8 +108,11 @@ class EasyOCREngine(BaseOCREngine):
                     text_threshold=0.35 if field_mode else 0.55,
                     low_text=0.15 if field_mode else 0.30,
                     link_threshold=0.20 if field_mode else 0.30,
-                    canvas_size=2048 if field_mode else 2560,
-                    mag_ratio=field_mag_ratio if field_mode else 1.5,
+                    # Ảnh thẻ đã được enhancer chuẩn hóa tới khoảng 1600 px.
+                    # Canvas 2304 giữ đủ chi tiết nhưng giảm lượng pixel
+                    # detector phải xử lý so với cấu hình 2560/1.5 cũ.
+                    canvas_size=2048 if field_mode else 2304,
+                    mag_ratio=field_mag_ratio if field_mode else 1.35,
                     slope_ths=0.20 if field_mode else 0.15,
                     ycenter_ths=0.55 if field_mode else 0.50,
                     height_ths=0.60 if field_mode else 0.50,

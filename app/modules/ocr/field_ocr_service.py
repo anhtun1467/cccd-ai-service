@@ -128,6 +128,7 @@ class FieldOCRService:
         field_layout: dict[str, Any] | None = None,
         reference_data: dict[str, Any] | None = None,
         skip_fields: Collection[str] | None = None,
+        skip_field_sources: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """
         Cắt ảnh CCCD và OCR từng trường riêng biệt.
@@ -179,10 +180,28 @@ class FieldOCRService:
 
             if field_name in skipped_fields:
                 field_result = field_result or {}
+                skip_reason = (skip_field_sources or {}).get(
+                    field_name,
+                    "CCCD_QR_FAST_PATH",
+                )
+                used_validated_full_card = (
+                    skip_reason == "VALIDATED_FULL_CARD_OCR"
+                )
+                used_validated_spatial = (
+                    skip_reason == "VALIDATED_SPATIAL_OCR"
+                )
                 field_ocr_results[field_name] = {
                     "fieldName": field_name,
                     "success": True,
-                    "message": "Đã dùng dữ liệu QR CCCD hợp lệ",
+                    "message": (
+                        "Đã dùng dữ liệu OCR toàn thẻ đã được xác thực"
+                        if used_validated_full_card
+                        else (
+                            "Đã dùng địa chỉ Spatial OCR đã được xác thực"
+                            if used_validated_spatial
+                            else "Đã dùng dữ liệu QR CCCD hợp lệ"
+                        )
+                    ),
                     "rawText": [],
                     "normalizedText": [],
                     "joinedText": "",
@@ -204,8 +223,13 @@ class FieldOCRService:
                     "retryErrors": [],
                     "glyphMatch": None,
                     "skipped": True,
-                    "skipReason": "CCCD_QR_FAST_PATH",
-                    "qrValidated": True,
+                    "skipReason": skip_reason,
+                    "qrValidated": not (
+                        used_validated_full_card
+                        or used_validated_spatial
+                    ),
+                    "fullCardValidated": used_validated_full_card,
+                    "spatialOcrValidated": used_validated_spatial,
                 }
                 continue
 

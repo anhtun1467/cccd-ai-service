@@ -1,0 +1,20 @@
+CCCD OCR Under-10s Spatial Fast Path - 2026-08-19
+
+Cumulative package. Supersedes previous QR/parser/crop/orientation/speed ZIPs.
+
+New change:
+- Reuse a validated SPATIAL_OCR address instead of running up to five
+  redundant dedicated EasyOCR field attempts.
+- Record VALIDATED_SPATIAL_OCR as the exact skip reason.
+- Expose metadata.fieldOcrSkippedByValidatedSpatialOcr.
+- Fall back to normal field OCR when the source or strict address validation
+  is not trustworthy.
+
+Expected supplied-sample result:
+- fieldOcrAttemptCount: 5 -> 0
+- processingTime estimate: 11.091s -> approximately 7.4-7.8s
+
+Validation in build workspace:
+- Ruff E/F/I: passed.
+- Python bytecode compilation: passed.
+- Archive integrity test: required before delivery.

@@ -1,0 +1,42 @@
+PACKAGE: cccd_zoom_portrait_upside_down_speed_fix_20260818.zip
+DATE: 2026-08-18
+TYPE: Cumulative overlay for cccd-ai-service
+
+PRIMARY CHANGES
+- app/modules/card_detection/fast_orientation.py
+  Conservative pre-OCR 0/180-degree orientation from QR position, QR finder
+  patterns, and front-card red layout.
+- app/services/ocr_pipeline.py
+  Runs visual orientation before QR/EasyOCR; avoids duplicate QR and enhanced
+  OCR passes; distinguishes parser failure from soft image-quality warnings.
+- app/modules/card_detection/contour_detector.py
+  Accepts verified near-full-frame CCCD contours and prevents internal Hough
+  strip replacement.
+- app/modules/card_detection/perspective_transformer.py
+  Caps warped/full-frame output to a 1800-pixel long edge and reports possible
+  source clipping.
+- app/modules/card_detection/detector.py
+  Exposes near-full-frame contour diagnostics.
+- scripts/benchmark_orientation_zoom.py
+  Privacy-safe timing benchmark for rotations 0/90/180/270.
+
+CUMULATIVE FEATURES RETAINED
+- ZXing-C++ multi-variant QR decoder with OpenCV fallback.
+- QR polygon/bounding-box overlay and parser/field/QR combined debug image.
+- QR/OCR fusion, field-level parser diagnostics, advisory address differences.
+- Whole-card contour/Hough protection and geometry/skew OCR gates.
+- Vietnamese field OCR variants, glyph support, and field crop alignment.
+
+NEW/UPDATED TESTS
+- tests/card_detection/test_fast_orientation.py
+- tests/card_detection/test_geometry_normalization.py
+- tests/card_detection/test_far_shot_card_crop.py
+- tests/ocr/test_ocr_speed_paths.py
+
+VERIFICATION
+- Python compileall: passed
+- Ruff E/F/I on changed source/tests: passed
+- Pytest: 216 passed, 1 skipped
+- Real-image orientation benchmark: rotations 0/90/180/270 resolved pre-OCR
+- Package contains no storage output, uploaded JSON, debug ZIP, dataset image,
+  QR payload, or CCCD personal data.

@@ -40,6 +40,51 @@ def test_processed_field_is_not_magnified_twice() -> None:
     assert processed["batch_size"] == raw["batch_size"] == 4
 
 
+def test_full_card_uses_bounded_canvas() -> None:
+    engine = EasyOCREngine.__new__(EasyOCREngine)
+    engine.reader = _RecordingReader()
+
+    engine._recognize(
+        image_path="enhanced_card.jpg",
+        allowlist="ABC",
+        field_mode=False,
+    )
+
+    call = engine.reader.calls[0]
+    assert call["canvas_size"] == 2304
+    assert call["mag_ratio"] == 1.35
+
+
+def test_validated_full_card_skips_only_strict_fields() -> None:
+    pipeline = OcrPipelineService()
+
+    skipped = pipeline.select_validated_full_card_field_ocr_skips(
+        {
+            "idNumber": "012345678901",
+            "fullName": "NGUYỄN VĂN A",
+            "dateOfBirth": "01/01/2000",
+            "gender": "Nam",
+            "nationality": "Việt Nam",
+            "placeOfOrigin": "Phường A, Thành phố B",
+            "placeOfResidence": "Phường C, Thành phố D",
+            "dateOfExpiry": "01/01/2030",
+        },
+        data_sources={
+            "placeOfOrigin": "SPATIAL_OCR",
+            "placeOfResidence": "FULL_CARD_OCR",
+        },
+    )
+
+    assert skipped == {
+        "idNumber",
+        "dateOfBirth",
+        "gender",
+        "nationality",
+        "placeOfOrigin",
+        "dateOfExpiry",
+    }
+
+
 def _weak_ocr_result() -> dict:
     return {
         "structuredData": {},
@@ -216,3 +261,45 @@ def test_valid_qr_and_strong_ocr_skip_expensive_skew_ocr_trials(
     assert info["retrySkipped"] is True
     assert info["skipReason"] == "QR_AND_STRONG_OCR"
     assert info["candidates"] == []
+
+
+def test_soft_blur_warning_does_not_raise_parser_field_requirement() -> None:
+    pipeline = OcrPipelineService()
+    result = pipeline.evaluate_ocr_readability(
+        merged_data={
+            "idNumber": "012345678901",
+            "fullName": "NGUYỄN VĂN A",
+        },
+        cropped_quality={
+            "is_blurry": True,
+            "is_too_dark": False,
+            "blur_score": 62.0,
+            "brightness_score": 155.0,
+        },
+        raw_text=["CĂN CƯỚC", "012345678901", "NGUYỄN VĂN A"],
+    )
+
+    assert result["hardLowQuality"] is False
+    assert result["minimumReadableCoreFields"] == 2
+    assert result["isReadable"] is True
+
+
+def test_hard_blur_still_requires_three_core_fields() -> None:
+    pipeline = OcrPipelineService()
+    result = pipeline.evaluate_ocr_readability(
+        merged_data={
+            "idNumber": "012345678901",
+            "fullName": "NGUYỄN VĂN A",
+        },
+        cropped_quality={
+            "is_blurry": True,
+            "is_too_dark": False,
+            "blur_score": 12.0,
+            "brightness_score": 155.0,
+        },
+        raw_text=["CĂN CƯỚC", "012345678901", "NGUYỄN VĂN A"],
+    )
+
+    assert result["hardLowQuality"] is True
+    assert result["minimumReadableCoreFields"] == 3
+    assert result["isReadable"] is False

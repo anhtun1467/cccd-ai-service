@@ -90,6 +90,21 @@ def test_full_frame_candidate_keeps_all_pixels_and_card_ratio() -> None:
     assert metadata["sourceCoverageRatio"] > 0.99
 
 
+def test_zoomed_high_resolution_card_is_capped_before_ocr() -> None:
+    transformer = PerspectiveTransformer()
+    image = np.full((2520, 4000, 3), 180, dtype=np.uint8)
+    points = np.array(
+        [[[0, 0]], [[3999, 0]], [[3999, 2519]], [[0, 2519]]],
+        dtype=np.float32,
+    )
+
+    warped, metadata = transformer.transform_with_metadata(image, points)
+
+    assert max(warped.shape[:2]) == transformer.MAX_OUTPUT_LONG_EDGE
+    assert metadata["outputScaleLimited"] is True
+    assert metadata["sourceLongEdge"] > transformer.MAX_OUTPUT_LONG_EDGE
+
+
 def test_detector_offers_full_frame_when_contour_would_crop_card() -> None:
     detector = CardDetector()
     image = np.full((700, 1073, 3), 205, dtype=np.uint8)

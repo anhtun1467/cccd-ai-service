@@ -1,0 +1,23 @@
+CCCD Ultra Speed OCR Call Reduction - 2026-08-19
+
+This cumulative package supersedes prior CCCD QR/parser/crop/orientation fixes.
+
+New speed changes:
+- Validated full-card OCR field skip with explicit source metadata.
+- QR and validated-full-card skip-set union.
+- Maximum one residual-skew OCR candidate.
+- Earlier strong-OCR/small-skew retry bypass.
+- Bounded 2304 canvas and 1.35 magnification for full-card EasyOCR.
+
+Accuracy safeguards:
+- Full name and both address fields keep dedicated field OCR unless a trusted
+  QR source already confirms the field.
+- Invalid or missing strict fields automatically retain dedicated field OCR.
+- Each skipped field records its actual skip source.
+
+Validation performed in build workspace:
+- Ruff E/F/I: passed.
+- Python bytecode compilation: passed.
+- Runtime pytest was not completed because the temporary validation
+  environment's OpenCV shared object was truncated; source code did not cause
+  that loader failure.

@@ -244,3 +244,33 @@ def test_large_card_touching_frame_is_not_replaced_by_internal_strip() -> None:
     actual = ContourDetector._order_quadrilateral(primary)
     target = ContourDetector._order_quadrilateral(expected)
     assert float(np.mean(np.linalg.norm(actual - target, axis=1))) < 14.0
+
+
+def test_zoomed_card_filling_frame_skips_internal_hough_replacement() -> None:
+    image = np.full((630, 1000, 3), (205, 222, 210), dtype=np.uint8)
+    # Chi tiết phủ mọi ô của lưới nội dung, gồm một QR giả có cạnh rất mạnh.
+    for row, y_value in enumerate(range(45, 610, 54)):
+        for column in range(4):
+            x1 = 25 + column * 240
+            x2 = min(985, x1 + 170)
+            cv2.line(
+                image,
+                (x1, y_value),
+                (x2, min(625, y_value + (row % 3))),
+                (35, 48, 45),
+                3,
+            )
+    cv2.rectangle(image, (810, 35), (955, 180), (20, 20, 20), 8)
+    cv2.rectangle(image, (835, 60), (930, 155), (205, 222, 210), 8)
+    cv2.rectangle(image, (855, 80), (910, 135), (20, 20, 20), 8)
+
+    primary, _, _, metadata = (
+        ContourDetector().find_card_contour_candidates_from_image(image)
+    )
+
+    assert primary is not None
+    assert metadata["detectionMethod"] == "large_foreground_contour"
+    assert metadata["wholeCardReliable"] is True
+    assert metadata["houghFallbackEvaluated"] is False
+    assert metadata["relaxedForegroundContour"]["nearFullFrame"] is True
+    assert metadata["primaryAreaRatio"] > 0.95

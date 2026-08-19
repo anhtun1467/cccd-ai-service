@@ -71,3 +71,4 @@ def test_qr_debug_draws_search_area_when_region_is_missing(
 
     assert Path(paths["detectionImage"]).is_file()
     assert "cropImage" not in paths
+

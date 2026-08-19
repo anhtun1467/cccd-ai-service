@@ -32,3 +32,4 @@ def test_back_side_is_not_reported_as_an_unclear_front_image() -> None:
     assert result["side"] == "BACK"
     assert "DATE_OF_ISSUE_LABEL" in result["backEvidence"]
     assert "MRZ_PREFIX" in result["backEvidence"]
+

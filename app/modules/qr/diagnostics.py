@@ -155,3 +155,4 @@ def qr_status_message(status: str) -> str:
             "Chưa khoanh được QR; hệ thống tiếp tục bằng OCR chữ."
         ),
     }.get(status, "Không xác định được trạng thái QR.")
+

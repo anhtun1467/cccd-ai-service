@@ -599,7 +599,7 @@ class ContourDetector:
         # Vùng nhỏ hơn 7% khung hình hầu như luôn là QR, chân dung hoặc
         # một cụm chữ bên trong thẻ. Ở kích thước detector cao 700 px, thẻ
         # nhỏ hơn mức này cũng không còn đủ chi tiết để OCR đáng tin cậy.
-        if not 0.070 <= area_ratio <= 0.94:
+        if not 0.070 <= area_ratio <= 1.001:
             return None
 
         side_lengths = [
@@ -1043,9 +1043,12 @@ class ContourDetector:
             rectangularity = (
                 contour_area / rectangle_area if rectangle_area > 0.0 else 0.0
             )
+            near_full_foreground = contour_area_ratio > 0.88
             if not (
-                0.42 <= contour_area_ratio <= 0.88
-                and rectangularity >= 0.78
+                0.42 <= contour_area_ratio <= 0.998
+                and rectangularity >= (
+                    0.84 if near_full_foreground else 0.78
+                )
             ):
                 continue
 
@@ -1065,20 +1068,71 @@ class ContourDetector:
             content_grid_coverage = float(
                 candidate_metrics.get("contentGridCoverage") or 0.0
             )
+            candidate_aspect = float(
+                candidate_metrics.get("aspectRatio") or 0.0
+            )
+            target_aspect = 85.60 / 53.98
+            aspect_error = abs(candidate_aspect - target_aspect) / target_aspect
+            ordered_candidate = self._order_quadrilateral(candidate_quad)
+            edge_tolerance = max(4.0, min(height, width) * 0.012)
+            candidate_edges_touched = [
+                edge_name
+                for edge_name, touched in (
+                    (
+                        "left",
+                        float(np.min(ordered_candidate[:, 0])) <= edge_tolerance,
+                    ),
+                    (
+                        "right",
+                        float(np.max(ordered_candidate[:, 0]))
+                        >= width - 1 - edge_tolerance,
+                    ),
+                    (
+                        "top",
+                        float(np.min(ordered_candidate[:, 1])) <= edge_tolerance,
+                    ),
+                    (
+                        "bottom",
+                        float(np.max(ordered_candidate[:, 1]))
+                        >= height - 1 - edge_tolerance,
+                    ),
+                )
+                if touched
+            ]
+            interior_edge_density = float(
+                candidate_metrics.get("interiorEdgeDensity") or 0.0
+            )
             if (
                 candidate_area_ratio < 0.45
                 or content_grid_coverage < 0.83
+                or (
+                    near_full_foreground
+                    and (
+                        candidate_area_ratio < 0.82
+                        or len(candidate_edges_touched) < 2
+                        or aspect_error > 0.16
+                        or interior_edge_density < 0.006
+                    )
+                )
             ):
                 continue
 
             contour_quad = candidate_quad
             relaxed_contour_metrics = {
                 "accepted": True,
-                "reason": "LARGE_RECTANGULAR_FOREGROUND_WITH_CARD_CONTENT",
+                "reason": (
+                    "NEAR_FULL_FRAME_WITH_CARD_CONTENT"
+                    if near_full_foreground
+                    else "LARGE_RECTANGULAR_FOREGROUND_WITH_CARD_CONTENT"
+                ),
                 "contourAreaRatio": round(contour_area_ratio, 4),
                 "rectangularity": round(rectangularity, 4),
                 "quadAreaRatio": round(candidate_area_ratio, 4),
                 "contentGridCoverage": round(content_grid_coverage, 4),
+                "nearFullFrame": near_full_foreground,
+                "frameEdgesTouched": candidate_edges_touched,
+                "aspectErrorRatio": round(aspect_error, 4),
+                "interiorEdgeDensity": round(interior_edge_density, 4),
             }
 
         def area_ratio(points: np.ndarray) -> float:
@@ -1114,6 +1168,59 @@ class ContourDetector:
         primary_grid_coverage = float(
             primary_metrics.get("contentGridCoverage") or 0.0
         )
+        primary_interior_edge_density = float(
+            primary_metrics.get("interiorEdgeDensity") or 0.0
+        )
+        primary_aspect = float(primary_metrics.get("aspectRatio") or 0.0)
+        target_aspect = 85.60 / 53.98
+        primary_aspect_error = (
+            abs(primary_aspect - target_aspect) / target_aspect
+            if primary_aspect > 0.0
+            else 1.0
+        )
+        near_full_frame_card = bool(
+            contour_quad is not None
+            and primary_area_ratio >= 0.82
+            and primary_edge_touches >= 2
+            and primary_grid_coverage >= 0.83
+            and primary_interior_edge_density >= 0.006
+            and primary_aspect_error <= 0.16
+        )
+        if near_full_frame_card and relaxed_contour_metrics is None:
+            ordered_primary = self._order_quadrilateral(contour_quad)
+            tolerance = max(4.0, min(height, width) * 0.012)
+            frame_edges_touched = [
+                edge_name
+                for edge_name, touched in (
+                    ("left", float(np.min(ordered_primary[:, 0])) <= tolerance),
+                    (
+                        "right",
+                        float(np.max(ordered_primary[:, 0]))
+                        >= width - 1 - tolerance,
+                    ),
+                    ("top", float(np.min(ordered_primary[:, 1])) <= tolerance),
+                    (
+                        "bottom",
+                        float(np.max(ordered_primary[:, 1]))
+                        >= height - 1 - tolerance,
+                    ),
+                )
+                if touched
+            ]
+            relaxed_contour_metrics = {
+                "accepted": True,
+                "reason": "NEAR_FULL_FRAME_WITH_CARD_CONTENT",
+                "contourAreaRatio": round(primary_area_ratio, 4),
+                "quadAreaRatio": round(primary_area_ratio, 4),
+                "contentGridCoverage": round(primary_grid_coverage, 4),
+                "nearFullFrame": True,
+                "frameEdgesTouched": frame_edges_touched,
+                "aspectErrorRatio": round(primary_aspect_error, 4),
+                "interiorEdgeDensity": round(
+                    primary_interior_edge_density,
+                    4,
+                ),
+            }
         primary_boundary_reliable = bool(
             primary_edge_score >= 7.10
             and primary_grid_coverage >= 0.75

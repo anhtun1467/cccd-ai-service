@@ -13,6 +13,10 @@ class PerspectiveTransformer:
     # Kích thước chuẩn ID-1: 85,60 x 53,98 mm.
     CARD_ASPECT_RATIO = 85.60 / 53.98
     MIN_OUTPUT_EDGE = 64
+    # EasyOCR toàn thẻ tự giới hạn canvas ở 2560 px và field cropper tiếp tục
+    # chuẩn hóa về 1000x630. Giữ ảnh warped 3K-6K chỉ làm tăng warp, JPEG và
+    # RAM trên ảnh chụp/phóng lớn mà không cung cấp thêm chi tiết hữu ích.
+    MAX_OUTPUT_LONG_EDGE = 1800
 
     def describe_source_geometry(
         self,
@@ -76,6 +80,24 @@ class PerspectiveTransformer:
             )
             for point in rect
         )
+        frame_edges_touched = [
+            edge_name
+            for edge_name, touched in (
+                ("left", float(np.min(rect[:, 0])) <= edge_threshold),
+                (
+                    "right",
+                    float(np.max(rect[:, 0]))
+                    >= image_width - 1 - edge_threshold,
+                ),
+                ("top", float(np.min(rect[:, 1])) <= edge_threshold),
+                (
+                    "bottom",
+                    float(np.max(rect[:, 1]))
+                    >= image_height - 1 - edge_threshold,
+                ),
+            )
+            if touched
+        ]
 
         return {
             "sourceCoverageRatio": round(source_area / image_area, 4),
@@ -86,6 +108,12 @@ class PerspectiveTransformer:
             "perspectiveSeverity": round(perspective_severity, 4),
             "frameCornerDeviation": round(frame_deviation, 4),
             "edgeTouchCount": int(edge_touch_count),
+            "frameEdgeTouchCount": len(frame_edges_touched),
+            "frameEdgesTouched": frame_edges_touched,
+            "cardPossiblyClippedByFrame": bool(
+                len(frame_edges_touched) >= 2
+                and source_area / image_area >= 0.78
+            ),
             "sourceBoundingBox": [
                 int(x),
                 int(y),
@@ -137,6 +165,7 @@ class PerspectiveTransformer:
         long_edge = max(measured_width, measured_height)
         if long_edge < self.MIN_OUTPUT_EDGE:
             raise ValueError("Vùng CCCD quá nhỏ để hiệu chỉnh phối cảnh")
+        long_edge = min(long_edge, float(self.MAX_OUTPUT_LONG_EDGE))
 
         # Ép về đúng tỷ lệ vật lý của CCCD để loại bỏ co kéo do góc chụp.
         short_edge = max(
@@ -145,9 +174,9 @@ class PerspectiveTransformer:
         )
 
         if measured_width >= measured_height:
-            return int(round(long_edge)), int(round(short_edge))
+            return round(long_edge), round(short_edge)
 
-        return int(round(short_edge)), int(round(long_edge))
+        return round(short_edge), round(long_edge)
 
     def transform_with_metadata(
         self,
@@ -164,6 +193,12 @@ class PerspectiveTransformer:
             raise ValueError("Ảnh đầu vào không hợp lệ")
 
         rect = self.order_points(points)
+        measured_source_long_edge = max(
+            float(np.linalg.norm(rect[1] - rect[0])),
+            float(np.linalg.norm(rect[2] - rect[1])),
+            float(np.linalg.norm(rect[3] - rect[2])),
+            float(np.linalg.norm(rect[0] - rect[3])),
+        )
         output_width, output_height = self._calculate_output_size(rect)
 
         destination = np.array(
@@ -198,6 +233,11 @@ class PerspectiveTransformer:
             "outputHeight": int(warped.shape[0]),
             "geometryRotationDegrees": geometry_rotation,
             "targetAspectRatio": round(self.CARD_ASPECT_RATIO, 6),
+            "sourceLongEdge": round(measured_source_long_edge, 2),
+            "outputLongEdgeLimit": self.MAX_OUTPUT_LONG_EDGE,
+            "outputScaleLimited": bool(
+                measured_source_long_edge > self.MAX_OUTPUT_LONG_EDGE + 0.5
+            ),
             "perspectiveMatrix": matrix.tolist(),
             **self.describe_source_geometry(image.shape, rect),
         }
@@ -225,13 +265,16 @@ class PerspectiveTransformer:
             geometry_rotation = 90
 
         height, width = normalized.shape[:2]
-        target_width = max(
-            width,
-            int(round(self.MIN_OUTPUT_EDGE * self.CARD_ASPECT_RATIO)),
+        target_width = min(
+            max(
+                width,
+                round(self.MIN_OUTPUT_EDGE * self.CARD_ASPECT_RATIO),
+            ),
+            self.MAX_OUTPUT_LONG_EDGE,
         )
         target_height = max(
             self.MIN_OUTPUT_EDGE,
-            int(round(target_width / self.CARD_ASPECT_RATIO)),
+            round(target_width / self.CARD_ASPECT_RATIO),
         )
         interpolation = (
             cv2.INTER_CUBIC
@@ -262,6 +305,11 @@ class PerspectiveTransformer:
             "outputHeight": int(normalized.shape[0]),
             "geometryRotationDegrees": geometry_rotation,
             "targetAspectRatio": round(self.CARD_ASPECT_RATIO, 6),
+            "sourceLongEdge": int(max(source_width, source_height)),
+            "outputLongEdgeLimit": self.MAX_OUTPUT_LONG_EDGE,
+            "outputScaleLimited": bool(
+                max(source_width, source_height) > self.MAX_OUTPUT_LONG_EDGE
+            ),
             "perspectiveMatrix": None,
             "resizeScaleX": round(target_width / float(width), 6),
             "resizeScaleY": round(target_height / float(height), 6),

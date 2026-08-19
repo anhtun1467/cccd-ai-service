@@ -388,6 +388,9 @@ class CardDetector:
         geometry["houghSkippedReason"] = contour_detection.get(
             "houghSkippedReason"
         )
+        geometry["relaxedForegroundContour"] = contour_detection.get(
+            "relaxedForegroundContour"
+        )
         geometry["contourReplacement"] = contour_detection.get(
             "contourReplacement"
         )
@@ -471,10 +474,19 @@ class CardDetector:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        cv2.imwrite(str(output_path / "detector_01_resized.jpg"), result["debug"]["resized"])
+        cv2.imwrite(
+            str(output_path / "detector_01_resized.jpg"),
+            result["debug"]["resized"],
+        )
         cv2.imwrite(str(output_path / "detector_02_mask.jpg"), result["debug"]["mask"])
-        cv2.imwrite(str(output_path / "detector_03_warped.jpg"), result["debug"]["warped"])
-        cv2.imwrite(str(output_path / "detector_04_enhanced.jpg"), result["debug"]["enhanced"]["final"])
+        cv2.imwrite(
+            str(output_path / "detector_03_warped.jpg"),
+            result["debug"]["warped"],
+        )
+        cv2.imwrite(
+            str(output_path / "detector_04_enhanced.jpg"),
+            result["debug"]["enhanced"]["final"],
+        )
 
         for index, candidate in enumerate(
             result.get("cardCandidates", []),
