@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import easyocr
+from PIL import Image
 
 from app.modules.ocr.base_engine import BaseOCREngine
 from app.modules.ocr.models import OCRResult, OCRTextBox
@@ -59,6 +60,40 @@ class EasyOCREngine(BaseOCREngine):
             field_mode=True,
         )
 
+    @staticmethod
+    def _read_image_size(image_path: str) -> tuple[int, int] | None:
+        """Đọc kích thước từ header ảnh, không giải mã toàn bộ pixel."""
+        try:
+            with Image.open(image_path) as image:
+                width, height = image.size
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+        if width <= 0 or height <= 0:
+            return None
+        return int(width), int(height)
+
+    def _full_card_runtime_settings(
+        self,
+        image_path: str,
+    ) -> tuple[int, float]:
+        """Chọn canvas theo kích thước thẻ đã nắn phối cảnh.
+
+        Card crop lớn đã có ký tự đủ pixel nên phóng tiếp không tạo thêm chi
+        tiết, chỉ làm detector CRAFT chậm. Ảnh nhỏ vẫn giữ cấu hình an toàn.
+        """
+        image_size = self._read_image_size(image_path)
+        if not image_size:
+            return 2304, 1.35
+
+        width, height = image_size
+        long_edge = max(width, height)
+        short_edge = min(width, height)
+        if long_edge >= 1500 and short_edge >= 850:
+            return 1920, 1.08
+        if long_edge >= 1150 and short_edge >= 650:
+            return 2112, 1.20
+        return 2304, 1.35
+
     def _recognize(
         self,
         image_path: str,
@@ -83,6 +118,11 @@ class EasyOCREngine(BaseOCREngine):
                 and "_raw" in Path(image_path).stem.casefold()
             )
             field_mag_ratio = 1.60 if raw_field_variant else 1.00
+            full_card_canvas, full_card_mag_ratio = (
+                self._full_card_runtime_settings(image_path)
+                if not field_mode
+                else (2304, 1.35)
+            )
             # Torch mới cảnh báo pin_memory ở mỗi lần EasyOCR chạy CPU.
             # Đây không phải lỗi và gây ngập log khi OCR nhiều field.
             with warnings.catch_warnings():
@@ -108,11 +148,14 @@ class EasyOCREngine(BaseOCREngine):
                     text_threshold=0.35 if field_mode else 0.55,
                     low_text=0.15 if field_mode else 0.30,
                     link_threshold=0.20 if field_mode else 0.30,
-                    # Ảnh thẻ đã được enhancer chuẩn hóa tới khoảng 1600 px.
-                    # Canvas 2304 giữ đủ chi tiết nhưng giảm lượng pixel
-                    # detector phải xử lý so với cấu hình 2560/1.5 cũ.
-                    canvas_size=2048 if field_mode else 2304,
-                    mag_ratio=field_mag_ratio if field_mode else 1.35,
+                    canvas_size=(
+                        2048 if field_mode else full_card_canvas
+                    ),
+                    mag_ratio=(
+                        field_mag_ratio
+                        if field_mode
+                        else full_card_mag_ratio
+                    ),
                     slope_ths=0.20 if field_mode else 0.15,
                     ycenter_ths=0.55 if field_mode else 0.50,
                     height_ths=0.60 if field_mode else 0.50,

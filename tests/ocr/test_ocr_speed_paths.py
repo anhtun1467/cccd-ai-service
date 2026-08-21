@@ -40,12 +40,52 @@ def test_processed_field_is_not_magnified_twice() -> None:
     assert processed["batch_size"] == raw["batch_size"] == 4
 
 
-def test_full_card_uses_bounded_canvas() -> None:
+def test_full_card_uses_safe_default_when_size_is_unknown() -> None:
     engine = EasyOCREngine.__new__(EasyOCREngine)
     engine.reader = _RecordingReader()
 
     engine._recognize(
         image_path="enhanced_card.jpg",
+        allowlist="ABC",
+        field_mode=False,
+    )
+
+    call = engine.reader.calls[0]
+    assert call["canvas_size"] == 2304
+    assert call["mag_ratio"] == 1.35
+
+
+def test_large_normalized_card_uses_fast_canvas(monkeypatch) -> None:
+    engine = EasyOCREngine.__new__(EasyOCREngine)
+    engine.reader = _RecordingReader()
+    monkeypatch.setattr(
+        engine,
+        "_read_image_size",
+        lambda image_path: (1775, 1119),
+    )
+
+    engine._recognize(
+        image_path="enhanced_card.jpg",
+        allowlist="ABC",
+        field_mode=False,
+    )
+
+    call = engine.reader.calls[0]
+    assert call["canvas_size"] == 1920
+    assert call["mag_ratio"] == 1.08
+
+
+def test_small_card_keeps_detail_canvas(monkeypatch) -> None:
+    engine = EasyOCREngine.__new__(EasyOCREngine)
+    engine.reader = _RecordingReader()
+    monkeypatch.setattr(
+        engine,
+        "_read_image_size",
+        lambda image_path: (900, 568),
+    )
+
+    engine._recognize(
+        image_path="small_card.jpg",
         allowlist="ABC",
         field_mode=False,
     )

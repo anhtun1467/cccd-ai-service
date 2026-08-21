@@ -1,0 +1,18 @@
+CCCD Adaptive Full-Card Canvas Speed Package - 2026-08-19
+
+Cumulative package; supersedes all earlier CCCD speed/fix ZIPs.
+
+New optimization:
+- Header-only image dimension inspection using Pillow.
+- 1920/1.08 EasyOCR profile for large normalized card crops.
+- 2112/1.20 profile for medium normalized card crops.
+- Safe 2304/1.35 fallback for small or unknown-size cards.
+
+Expected supplied-sample impact:
+- Full-card detector canvas pixel area: -30.6%.
+- Estimated total processing time after warm-up: about 5.0-6.5 seconds.
+
+Validation:
+- Ruff E/F/I passed.
+- Python compilation passed.
+- Adaptive profile behavioral checks passed.
