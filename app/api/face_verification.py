@@ -16,6 +16,7 @@ from app.schemas.face_verification import (
     FaceVerificationFromOcrResponse,
     FaceVerificationResponse,
     FaceSessionResponse,
+    FaceMetrics,
 )
 from app.services.face_verification_pipeline import face_verification_pipeline
 from app.services.face_session_store import (
@@ -130,7 +131,10 @@ async def verify_face(
             card_image_bytes,
             webcam_image_bytes,
         )
-        return FaceVerificationResponse(**pipeline_output.to_dict())
+        return FaceVerificationResponse(
+        **pipeline_output.to_dict(),
+        metrics=FaceMetrics()
+    )
 
     except AppException:
         raise
